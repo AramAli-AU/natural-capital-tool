@@ -1,7 +1,12 @@
+# Startup-optimised ShinyLive edition (2026-11-07)
+# Removes Plotly and unused Excel export dependency; preserves assessment,
+# detailed scoring guides, DT tables and PDF reporting.
+# Save as app.R alongside the existing www/ directory before export.
+
 # ============================================================
 # GREEN SHEEP PROJECT - Natural-capital assessment and reporting
 # Full Shiny application with natural-capital scoring guides
-# PART 1 of 2
+# Complete single-file Shiny application
 # 
 # Copyright © September 2026. All rights reserved.
 # Owner & Creator: Dr Aram Ali, Green Sheep Project Manager
@@ -15,7 +20,7 @@
 # permission from Dr Aram Ali.
 # ============================================================
 
-required <- c("shiny", "bslib", "DT", "plotly", "writexl", "base64enc")
+required <- c("shiny", "bslib", "DT", "png")
 
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) {
@@ -27,10 +32,7 @@ suppressPackageStartupMessages({
   library(shiny)
   library(bslib)
   library(DT)
-  library(plotly)
-  library(writexl)
-  
-  
+  library(png)
 })
 
 brand <- list(dark = "#2F5D3A", green = "#5E8C57", cream = "#F7F8F4", red = "#A33A45", text = "#26352B")
@@ -38,11 +40,7 @@ brand <- list(dark = "#2F5D3A", green = "#5E8C57", cream = "#F7F8F4", red = "#A3
 contact <- list(
   name = "Dr Aram Ali",
   role = "Green Sheep Project Manager",
-  email = paste(
-    "aali@wheatbeltnrm.org.au,",
-    "a.aramali@outlook.com",
-    sep = "\n"
-  ),
+  email = "aali@wheatbeltnrm.org.au, a.aramali@outlook.com",
   mobile = "0470 488 185",
   address = "269 Fitzgerald St E, Northam, WA"
 )
@@ -63,8 +61,10 @@ disclaimer_text <- paste(
 )
 
 safe <- function(x) {
-  if (is.null(x) || !length(x) || is.na(x) || !nzchar(trimws(as.character(x)))) return("Farm self-assessment")
-  trimws(as.character(x))
+  if (is.null(x) || length(x) == 0L) return("Farm self-assessment")
+  x <- as.character(x)[1L]
+  if (is.na(x) || !nzchar(trimws(x))) return("Farm self-assessment")
+  trimws(x)
 }
 
 clamp <- function(x) {
@@ -212,14 +212,202 @@ metric_defs <- data.frame(
   stringsAsFactors = FALSE
 )
 
+metric_defs$Category <- ifelse(
+  metric_defs$Metric == "Salt Affected Land Management",
+  "Natural Asset / Condition Metric",
+  metric_defs$Category
+)
+
 metric_defs$Priority <- ifelse(metric_defs$Category == "Major Natural Capital Metric", "High (Rainsford et al. 2025)", "Standard")
+
+
+
+# ------------------------------------------------------------
+# Detailed metric guidance
+# ------------------------------------------------------------
+# The guidance separates four elements that are useful for producer
+# decision-making: what the metric means, why it matters, what to look for,
+# and what management actions can influence it. This keeps the assessment
+# evidence -> score -> mechanism -> action -> outcome -> monitoring pathway.
+metric_guidance <- data.frame(
+  Metric = metric_keys,
+  Why_it_matters = c(
+    "Ecological condition influences the capacity of vegetation, soils and associated habitats to provide ecosystem services. Higher condition can support biodiversity, soil protection, pollination, pest regulation, microclimate regulation and landscape resilience.",
+    "Woody vegetation can provide habitat, shelter, shade, carbon storage and microclimate benefits. The useful amount and placement of woody vegetation depend on landscape context, farm production needs, salinity risk and existing native vegetation.",
+    "Large, consolidated patches generally retain more interior habitat and can be less vulnerable to fragmentation than many small isolated patches. Aggregation should therefore be considered alongside total woody cover and connectivity.",
+    "Shorter functional distances can improve access to shade and shelter and bring ecosystem services closer to productive areas. Distance should be interpreted with the actual distribution and accessibility of vegetation, not distance alone.",
+    "Protective cover and soil stability reduce erosion and runoff and help maintain infiltration, soil organic matter and pasture establishment. The lowest-cover period is particularly important because short periods of exposure can create disproportionate soil loss risk.",
+    "Riparian vegetation can reduce bank erosion and sediment movement, filter nutrients, improve water quality and provide habitat and movement corridors. The condition and continuity of the buffer matter as well as its mapped extent.",
+    "Forage condition is a key link between pasture resources, sheep production, ground cover and resilience. Persistent, productive and palatable pastures can provide more reliable feed while protecting soil during variable seasons.",
+    "Retained native vegetation represents an on-farm natural asset and can support biodiversity, ecosystem services and landscape resilience. Extent should be interpreted with vegetation condition, legal requirements and productive land-use context.",
+    "Structural habitat features create nesting, refuge, feeding and shelter opportunities for fauna. Maintaining a range of features can increase habitat complexity even where large native vegetation patches are limited.",
+    "Connectivity affects movement between habitat patches and can influence recolonisation, gene flow, pollination, pest regulation and ecological resilience. On-farm actions can be more effective when they connect with neighbouring vegetation.",
+    "Accessible shade and shelter can reduce heat and cold stress and improve animal welfare. Distribution is important because a large amount of shelter that livestock cannot reach when needed has limited functional value.",
+    "Reliable and well-distributed water supports animal welfare and allows grazing pressure to be managed more evenly. Failures, poor water quality or long walking distances can create production and welfare risks.",
+    "A documented climate and GHG plan helps identify major emission sources, climate risks, mitigation opportunities and monitoring needs. This is a management-readiness indicator and is not a direct farm emissions inventory.",
+    "Drought preparedness reduces the chance that decisions are delayed until feed, water, ground cover or animal condition have already deteriorated. Trigger points and pre-planned actions improve response timing.",
+    "Efficient nutrient management can maintain pasture and crop production while reducing nutrient losses, unnecessary expenditure and environmental impacts. Soil and plant information are important for matching inputs to actual requirements.",
+    "Feed efficiency links the feed resource to animal output. Better matching of feed supply, animal demand, health and grazing management can improve production efficiency without compromising welfare.",
+    "Animal welfare depends on reliable feed and water, health prevention and treatment, suitable handling, shelter, stocking pressure and timely responses to risks. Strong welfare systems also support productivity and reduce avoidable losses.",
+    "Pasture planning connects animal demand with feed supply, rest periods and grazing pressure. Good planning helps maintain pasture persistence, ground cover and feed availability through seasonal variation.",
+    "Preventive animal-health programs reduce avoidable disease and parasite impacts and support sheep condition, survival and productivity. Monitoring is important because risk changes with season, property and enterprise.",
+    "Biosecurity reduces the probability and consequences of introducing or spreading diseases, pests and weeds. Good systems rely on practical controls at livestock entry, visitor access, equipment movement and traceability points.",
+    "Lambing management has a direct relationship with ewe welfare, lamb survival and enterprise output. Nutrition, paddock selection, shelter and timely observation should be matched to seasonal and flock conditions.",
+    "Safe systems protect people and reduce the likelihood that injuries, poor procedures or emergencies disrupt farm operations. Training, equipment maintenance and clear emergency procedures are practical foundations.",
+    "Business resilience supports the farm's ability to absorb and recover from climate, market, production and financial shocks. Good records and scenario planning improve the quality and timing of management decisions.",
+    "Community and industry relationships provide access to local knowledge, technical support, coordinated landscape action and learning. Useful engagement is more important than the number of relationships alone.",
+    "Stocking fit is a screening indicator of grazing pressure relative to the entered sustainable capacity. It should be interpreted with seasonal feed supply, ground cover, pasture condition and drought conditions rather than treated as a fixed carrying-capacity certification.",
+    "Salt-affected land is a natural asset and land-condition issue because salinity can alter soil function, vegetation composition, productivity, erosion risk and habitat. Management determines whether affected areas are stabilised, protected and progressively improved or allowed to deteriorate."
+  ),
+  Context = c(
+    "Use local reference condition where possible. A high score should not be interpreted as proof that every ecosystem service is functioning at its maximum.",
+    "There is no universal target percentage for every farm. Consider existing remnants, rainfall, salinity, productive area, biodiversity priorities and landscape context.",
+    "A high aggregation score does not compensate for very low woody cover. Consider aggregation together with cover, condition and connectivity.",
+    "The calculation gives a higher score to shorter distances. Check whether livestock can actually access the shelter and whether shade is available at the times and locations of greatest need.",
+    "Use the most vulnerable season when estimating minimum cover. Ground-cover measurements should ideally be supported by field observation or monitoring data.",
+    "If no meaningful riparian area exists, record that limitation rather than treating absence as automatically equivalent to poor condition.",
+    "Separate pasture condition from short-term feed-on-offer. Seasonal rainfall and recent grazing history can change the apparent condition of forage.",
+    "Native vegetation extent alone does not describe ecological condition. Consider clearing history, vegetation type, condition and statutory requirements.",
+    "Some habitat features should be retained even when they have little direct production value, provided they do not create safety or biosecurity hazards.",
+    "Connectivity is partly a landscape-scale property. Consider neighbouring remnants and regional corridors, not just the farm boundary.",
+    "Consider heat load, prevailing winds, stock movement, lambing locations and waterpoints when judging functional access to shelter.",
+    "Water quality and reliability can vary during drought and summer. Distribution should be considered alongside paddock size and grazing patterns.",
+    "The metric does not estimate tonnes CO2-e per hectare or emissions intensity. A formal inventory is needed for quantitative GHG claims.",
+    "Drought preparedness should be reviewed before each high-risk season and updated when feed, water or market conditions change.",
+    "Use locally relevant soil tests, pasture information and agronomic advice when making fertiliser or amendment decisions.",
+    "Production efficiency should not be improved by reducing animal welfare, underfeeding or excessive stocking pressure.",
+    "Welfare indicators should reflect actual practice, seasonal risks and applicable Australian animal-welfare requirements.",
+    "Pasture planning is most useful when feed budgets and grazing observations are updated as seasons change.",
+    "Health priorities vary with enterprise, local parasite pressure, vaccination programs and veterinary advice.",
+    "Biosecurity controls should be proportionate to the actual disease, weed and livestock-movement risks of the property.",
+    "Lambing practices should reflect ewe condition, litter size, weather, shelter availability and the enterprise's lambing system.",
+    "Review safety risks for family members, employees, contractors and visitors rather than focusing only on formal employees.",
+    "Business resilience is broader than profitability in one season; it includes liquidity, debt exposure, risk management and capacity to respond to disruption.",
+    "Engagement should support practical outcomes such as coordinated weed control, habitat restoration, knowledge exchange or access to technical advice.",
+    "The result is only as reliable as the sustainable capacity entered by the user. Consider feed supply, seasonal variability and land condition when setting that value.",
+    "Salt responses are highly site-specific. Consider soil type, groundwater, salinity severity, rainfall, drainage, species suitability, grazing pressure and available water before changing management."
+  ),
+  Actions = c(
+    "Protect high-condition areas; control priority weeds; limit damaging disturbance; use appropriate grazing exclusions; and restore degraded patches where feasible.",
+    "Retain existing woody vegetation; protect remnants; establish strategic plantings or shelterbelts where they address a clear farm or landscape need; and avoid poorly placed plantings on productive land or in areas with other environmental constraints.",
+    "Protect large patches from further fragmentation; retain internal habitat; and reconnect smaller patches where a practical corridor or stepping-stone opportunity exists.",
+    "Maintain or establish shade and shelter close to production areas; improve distribution where livestock cannot access existing vegetation; and prioritise high-use paddocks and lambing areas.",
+    "Maintain protective ground cover; adjust grazing pressure; use tactical spelling; protect vulnerable soils; and monitor minimum cover during high-risk periods.",
+    "Fence or manage riparian areas where stock pressure is damaging condition; maintain buffer vegetation; stabilise priority erosion points; and revegetate important gaps.",
+    "Maintain persistent desirable pasture species; manage grazing pressure; address pasture decline early; and use feed budgeting to align demand with pasture supply.",
+    "Retain native vegetation; prevent avoidable clearing; protect remnant condition; and prioritise restoration where it improves ecological function or landscape linkage.",
+    "Retain logs, litter, shrubs, mature trees, hollows and other safe structural features; and avoid unnecessary removal of habitat elements.",
+    "Protect existing links; retain riparian and shelterbelt corridors; and establish stepping-stone or corridor vegetation where it provides a clear connectivity benefit.",
+    "Maintain accessible shade and wind protection; improve distribution near stock concentration areas; and plan for shade and shelter before heat or cold events.",
+    "Audit troughs, tanks, dams, pumps, pipelines and water quality; repair leaks and weak points; maintain reserve capacity; and improve distribution where grazing pressure is uneven.",
+    "Document major emissions sources and climate risks; identify practical mitigation or adaptation actions; set responsibilities; and review progress annually.",
+    "Set drought trigger points; monitor feed, water, ground cover and animal condition; prepare destocking and feeding options; and act before critical thresholds are reached.",
+    "Use soil and plant information to match nutrient inputs to crop or pasture demand; keep nutrient records; and review application timing and loss risks.",
+    "Match feed supply to animal demand; reduce avoidable feed wastage; maintain animal health; and use pasture and animal records to identify efficiency opportunities.",
+    "Maintain reliable feed and water; monitor condition and health; provide suitable shelter; use low-stress handling; and respond promptly to welfare risks.",
+    "Use feed budgets, grazing plans and rest periods; monitor pasture response; and adjust allocation when seasonal conditions change.",
+    "Maintain vaccination and parasite-control programs; monitor animal condition; keep health records; and seek veterinary advice when disease risk or unexplained losses arise.",
+    "Strengthen quarantine, traceability, visitor controls, livestock-entry procedures, equipment hygiene and weed-seed movement controls.",
+    "Plan lambing paddocks and nutrition; provide appropriate shelter; monitor ewes and lambs; and record lamb survival to identify recurring losses.",
+    "Maintain induction and training; review machinery, chemical and livestock-handling risks; keep emergency procedures current; and ensure appropriate protective equipment is available.",
+    "Maintain useful financial and production records; monitor cash flow; test key scenarios; maintain appropriate risk buffers; and review exposure to major climate and market risks.",
+    "Maintain useful relationships with NRM organisations, Landcare groups, neighbours, advisers and industry networks where they contribute to practical farm or landscape outcomes.",
+    "Review actual stocking pressure against realistic sustainable capacity; reduce pressure when feed or ground cover is limiting; and increase the feed base before increasing stock numbers.",
+    "Map and monitor saline areas; protect vulnerable land from damaging grazing; establish suitable salt-tolerant vegetation where appropriate; control erosion and bare areas; and review progress over time."
+  ),
+  Mechanism = c(
+    "Maintaining vegetation structure and reducing disturbance preserves habitat, soil protection and ecosystem-service capacity.",
+    "Woody vegetation modifies microclimate, provides structure and habitat, stores carbon and can improve shelter and connectivity when appropriately located.",
+    "Consolidated patches reduce edge effects and can retain larger areas of interior habitat, while linked patches can improve movement across fragmented landscapes.",
+    "Reducing functional distance increases the likelihood that livestock and beneficial organisms can use shelter and vegetation-associated services.",
+    "Ground cover intercepts rainfall, reduces runoff and detachment, and supports infiltration and soil biological function.",
+    "Vegetated buffers slow overland flow, trap sediment and nutrients, stabilise banks and provide habitat along water-associated areas.",
+    "Persistent forage maintains feed supply and ground cover, reducing the risk that grazing pressure drives pasture decline and soil exposure.",
+    "Retaining native vegetation preserves ecosystem structure and the habitat and regulating functions associated with native ecosystems.",
+    "Structural complexity creates more niches and refuge opportunities for wildlife and beneficial organisms.",
+    "Connected habitat provides movement pathways and reduces isolation between suitable patches.",
+    "Shade and shelter reduce thermal and wind exposure, helping animals maintain body condition and welfare during stressful weather.",
+    "Reliable water reduces welfare risk and allows grazing to be distributed more effectively across the farm.",
+    "A documented plan turns climate and emissions risks into identifiable management actions and measurable follow-up tasks.",
+    "Early decisions can prevent feed and ground-cover deficits from becoming severe enough to cause larger production, welfare and land-condition losses.",
+    "Matching nutrient supply to demand improves nutrient-use efficiency while reducing the amount available for loss through runoff, leaching or volatilisation.",
+    "Better matching of feed supply and animal demand can improve output per unit of feed while maintaining health and welfare.",
+    "Preventive management reduces exposure to avoidable welfare hazards and allows earlier intervention when problems arise.",
+    "Planned grazing reduces repeated pressure on the same pasture areas and helps maintain recovery and ground cover.",
+    "Prevention and early detection reduce disease and parasite impacts before they become larger production or welfare problems.",
+    "Entry controls and hygiene reduce opportunities for biological threats to enter or spread through livestock, people, vehicles and equipment.",
+    "Good lambing management improves the probability that ewes and lambs have adequate nutrition, shelter and timely intervention during a high-risk production period.",
+    "Clear procedures, training and maintained equipment reduce exposure to preventable hazards and limit disruption after incidents.",
+    "Records and scenario planning improve the speed and quality of decisions when climate, market or production conditions change.",
+    "Knowledge exchange and coordinated action can increase access to information, technical support and landscape-scale outcomes.",
+    "Keeping grazing pressure within the feed and land base reduces pasture depletion and soil-cover loss; exceeding capacity increases these risks.",
+    "Salinity-aware vegetation and grazing management can maintain cover, reduce erosion and stabilise productive use of affected land while limiting further degradation."
+  ),
+  Expected_outcome = c(
+    "More stable ecological function, habitat value and protection of soil and vegetation assets.",
+    "Better habitat and shelter distribution, with potential benefits for biodiversity, livestock protection and landscape resilience.",
+    "Less fragmentation and stronger functional habitat structure where consolidation and reconnection are feasible.",
+    "Improved access to shade and shelter and better distribution of vegetation-related ecosystem services.",
+    "More persistent ground cover, lower erosion risk and stronger soil protection through variable seasons.",
+    "Improved bank stability, water-quality protection and habitat continuity.",
+    "More reliable pasture productivity, persistence and feed availability.",
+    "Retention of native ecological assets and improved opportunities for biodiversity and ecosystem services.",
+    "Greater habitat complexity and more opportunities for fauna and beneficial organisms.",
+    "Improved movement pathways and stronger links between habitat patches.",
+    "Reduced weather stress and better livestock access to functional shelter.",
+    "More reliable water supply and more even distribution of grazing pressure.",
+    "Clearer climate-risk management and a stronger basis for future quantitative emissions accounting.",
+    "Earlier drought responses, reduced emergency decisions and better protection of feed, animals and ground cover.",
+    "Better nutrient-use efficiency with less unnecessary input and loss risk.",
+    "Improved production efficiency without compromising welfare.",
+    "Reduced avoidable welfare risks and stronger animal health and productivity outcomes.",
+    "Better pasture recovery, feed planning and ground-cover protection.",
+    "Lower avoidable health losses and improved flock condition and productivity.",
+    "Lower risk of introducing or spreading diseases, pests and weeds.",
+    "Improved lamb survival, ewe welfare and identification of recurring lambing losses.",
+    "Fewer preventable incidents and stronger workforce readiness.",
+    "Greater capacity to absorb and respond to financial, market and climate shocks.",
+    "Stronger access to knowledge, support and coordinated landscape outcomes.",
+    "Grazing pressure better matched to feed and land capability, reducing degradation risk.",
+    "More stable saline areas, better ground cover and improved productive or ecological function where site conditions allow."
+  ),
+  Monitoring = c(
+    "Reassess condition after major disturbance, restoration or significant seasonal change; use repeat field observations or mapped evidence where available.",
+    "Track woody cover and condition periodically using farm maps, imagery or repeat field observations.",
+    "Monitor patch size, fragmentation and links between patches after clearing, restoration or revegetation projects.",
+    "Review distance and accessibility after vegetation establishment and during high-heat or high-shelter-demand periods.",
+    "Monitor median and minimum ground cover through vulnerable seasons and after major grazing or rainfall events.",
+    "Inspect riparian vegetation, bank condition, bare areas and stock-access pressure before and after management changes.",
+    "Track pasture composition, persistence, cover and feed availability across seasons.",
+    "Update native vegetation mapping after clearing, restoration or major disturbance and verify condition in priority areas.",
+    "Record retained habitat features and inspect their condition during farm planning or biodiversity checks.",
+    "Review connectivity after revegetation, clearing or major infrastructure changes and consider landscape-scale links.",
+    "Check shade availability and stock access before and during hot or cold periods.",
+    "Test water reliability and quality, inspect infrastructure routinely and record failures and repairs.",
+    "Review climate risks, actions and indicators at least annually and update emissions data when a quantitative inventory is available.",
+    "Review trigger points and drought plans before high-risk seasons and record decisions made during drought.",
+    "Retain soil-test and input records and review nutrient budgets against production outcomes.",
+    "Track animal performance, feed use and pasture outcomes where reliable records are available.",
+    "Review welfare risks routinely and record significant incidents, treatments and corrective actions.",
+    "Update feed budgets and grazing plans as seasonal conditions change and compare planned versus observed pasture response.",
+    "Review health records, vaccination status, parasite indicators and unexplained mortality or condition losses.",
+    "Audit quarantine, traceability, visitor and equipment controls periodically and after relevant incidents.",
+    "Record lambing outcomes, lamb survival and recurring causes of loss to guide future management.",
+    "Review incidents, near misses, training records and emergency procedures regularly.",
+    "Review cash flow, key financial ratios or indicators, debt exposure and scenario assumptions at appropriate intervals.",
+    "Record practical outcomes from engagement such as advice adopted, coordinated works, training or restoration activities.",
+    "Review stocking pressure against pasture condition, feed availability, ground cover and seasonal outlook rather than using stocking rate alone.",
+    "Map saline areas and repeat observations of vegetation cover, bare soil, erosion and management effectiveness through time."
+  ),
+  stringsAsFactors = FALSE
+)
 
 formulas <- data.frame(
   Component = c("Ecological condition", "Woody vegetation cover", "Aggregation", "Proximity", "Soil condition",
                 "Riparian buffer condition", "Forage condition", "Native vegetation extent", "Metric score",
                 "Domain score", "Overall score", "Stocking fit", "Salt affected land"),
   Formula = c("EC = sum(Ai x Wi) / Afarm", "Woody cover = Awood / Afarm", "Aggregation = farm-entered proxy (0-1)",
-              "Proximity = farm-entered proximity score (0-1)", "Soil = mean(P50, P10, stability) / 100", "Riparian = riparian % / 100",
+              "Proximity = piecewise distance-to-score index: <300 m = 0.70-1.00; 300-500 m = 0.40-0.69; >500 m = 0-0.39, declining to 0 at 1,000 m and remaining 0 beyond 1,000 m.", "Soil = mean(P50, P10, stability) / 100", "Riparian = riparian % / 100",
               "FC = farm-entered proxy (0-1)", "Native extent = native % / 100", "Score = 100 x clamp(raw, 0, 1)",
               "Mean of component metric scores", "Mean of seven domain scores",
               "Stocking fit = clamp(1 - abs(actual - capacity) / capacity)", "Salt = management score (0-5) / 5"),
@@ -231,7 +419,7 @@ calculation_methods <- data.frame(
   Equation_or_calculation = c("Area-weighted ecosystem-condition states relative to reference condition.",
                               "Woody vegetation area divided by total farm area.",
                               "Farm-entered patch-consolidation proxy between 0 and 1.",
-                              "Farm-entered proximity score between 0 and 1.",
+                              "Piecewise proximity index based on straight-line distance: <300 m = 0.70-1.00; 300-500 m = 0.40-0.69; >500 m = 0-0.39, declining to 0 at 1,000 m and remaining 0 beyond 1,000 m.",
                               "Mean of median cover, minimum cover and stability, divided by 100.",
                               "Riparian woody vegetation percentage divided by 100.",
                               "Farm-entered forage condition proxy between 0 and 1.",
@@ -254,8 +442,8 @@ calculation_methods <- data.frame(
                               "Entered community-engagement score divided by 5.",
                               "Stocking pressure relative to entered sustainable capacity.",
                               "Salt-affected land management score (0-5) divided by 5."),
-  App_implementation = c("Farm-entered ecological condition proxy.", "Woody vegetation cover score (0-1).",
-                         "Farm-entered aggregation proxy.", "Farm-entered proximity score (0-1).",
+  App_implementation = c("Farm-entered ecological condition proxy.", "Woody percentage / 100.",
+                         "Farm-entered aggregation proxy.", "Piecewise distance-to-score conversion using the 300 m and 500 m thresholds shown in the Proximity scoring guide.",
                          "Mean of three cover inputs / 100.", "Riparian percentage / 100.",
                          "Farm-entered forage proxy.", "Native percentage / 100.",
                          "Habitat score / 5.", "Connectivity score / 5.", "Shade score / 5.",
@@ -283,8 +471,37 @@ score_methods <- data.frame(
   stringsAsFactors = FALSE
 )
 
+# Proximity scoring follows the producer-facing scoring guide exactly:
+#   <300 m    -> 0.70-1.00 (highly desirable)
+#   300-500 m -> 0.40-0.69 (desirable)
+#   >500 m    -> 0.00-0.39 (undesirable)
+# The score is continuous within each class. At 300 m and 500 m the score
+# changes class, so the boundary values are 0.69 and 0.39 respectively.
+# For distances above 500 m, the score declines linearly to 0 at 1,000 m
+# and remains 0 for greater distances.
+proximity_score <- function(distance_m) {
+  d <- suppressWarnings(as.numeric(distance_m))
+  if (!is.finite(d)) return(NA_real_)
+  d <- max(0, d)
+  
+  if (d < 300) {
+    # 0 m = 1.00; just below 300 m approaches 0.70.
+    score <- 1.00 - (0.30 * d / 300)
+  } else if (d <= 500) {
+    # 300 m = 0.69; 500 m = 0.40.
+    score <- 0.69 - (0.29 * (d - 300) / 200)
+  } else if (d < 1000) {
+    # >500 m = 0.39 down to 0 at 1,000 m.
+    score <- 0.39 * (1000 - d) / 500
+  } else {
+    score <- 0
+  }
+  
+  clamp(score)
+}
+
 calc_metrics <- function(x) {
-  prox <- clamp(as.numeric(x$distance))
+  prox <- proximity_score(x$distance)
   soil <- safe_mean(c(x$soil_median, x$soil_minimum, x$soil_stability)) / 100
   fit <- if (is.finite(x$capacity) && x$capacity > 0) {
     clamp(1 - abs(x$stocking - x$capacity) / x$capacity)
@@ -294,7 +511,7 @@ calc_metrics <- function(x) {
   
   z <- c(
     Ecological_Condition = x$ecological,
-    Woody_Vegetation_Cover = x$woody,
+    Woody_Vegetation_Cover = x$woody / 100,
     Aggregation = x$aggregation,
     Proximity = prox,
     Soil_Condition = soil,
@@ -419,8 +636,7 @@ recommendation_map <- data.frame(
     "Business resilience improves capacity to manage climate, market and production shocks.",
     "Engagement supports knowledge exchange, benchmarking and coordinated action.",
     "Stocking fit directly controls grazing pressure relative to the sustainable feed and land base.",
-    "Salt-tolerant vegetation and controlled grazing stabilise saline areas, prevent erosion, maintain productivity and reduce further salinity spread. About 2.5 million hectares of Australian agricultural land are affected by dryland salinity, including about 1.8 million hectares in Western Australia—over 70% of the national affected area."
-  ),
+    "Salt-tolerant vegetation and controlled grazing stabilise saline areas, prevent erosion, maintain productivity and reduce further salinity spread. About 2.5 million hectares of Australian agricultural land are affected by dryland salinity, including about 1.8 million hectares in Western Australia which is over 70% of the national affected area."),
   Priority = c(
     "High", "High", "High", "High", "High", "High", "High", "High", "Moderate", "Moderate",
     "High", "High", "High", "High", "Moderate", "Moderate", "High", "Moderate", "Moderate",
@@ -455,9 +671,26 @@ rec_engine <- function(m) {
     all.x = TRUE,
     sort = FALSE
   )
+  
+  # Add the detailed guidance by explicit metric-key matching. This avoids
+  # duplicate .x/.y columns and guarantees that Mechanism, Actions, Expected
+  # outcome and Monitoring are populated for every metric.
+  gi <- match(out$Metric, metric_guidance$Metric)
+  guidance_cols <- c(
+    "Why_it_matters", "Context", "Actions", "Mechanism",
+    "Expected_outcome", "Monitoring"
+  )
+  for (nm in guidance_cols) {
+    out[[nm]] <- metric_guidance[[nm]][gi]
+  }
+  
   out$Reference <- refs$Title[out$ReferenceIndex]
   out$ReferenceURL <- refs$URL[out$ReferenceIndex]
   out$ReferenceIndex <- NULL
+  
+  # Keep the original assessment metric order.
+  out <- out[match(m$Metric, out$Metric), , drop = FALSE]
+  rownames(out) <- NULL
   out
 }
 
@@ -487,14 +720,14 @@ asset <- function(filename) {
     "Aggregation.webp" = "Aggregatio.webp",
     "Aggregatio.webp" = "Aggregation.webp"
   )
-
+  
   alias_candidates <- aliases[[filename]]
   if (is.null(alias_candidates)) alias_candidates <- character(0)
-
+  
   # For any legacy PNG/JPG reference, try the matching WebP filename first.
   webp_candidate <- sub("\\.(png|jpe?g)$", ".webp", filename, ignore.case = TRUE)
   candidates <- unique(c(webp_candidate, filename, alias_candidates))
-
+  
   for (candidate in candidates) {
     if (!is.na(candidate) && nzchar(candidate) &&
         file.exists(file.path("www", candidate))) {
@@ -520,7 +753,7 @@ project_video <- function(path, alt = "Sheep video") {
                                       "Video not found: put SheepVideo.mp4 in www."))
   tagList(
     tags$video(src = video_path, controls = NA, autoplay = NA,
-               loop = NA, muted = NA, playsinline = NA, preload = "metadata",
+               loop = NA, muted = NA, playsinline = NA, preload = "none",
                class = "project-image", `aria-label` = alt,
                onerror = "this.nextElementSibling.style.display='block';",
                "Your browser does not support this video."),
@@ -558,7 +791,7 @@ natural_capital_img <- tags$img(
 css <- paste0(
   ".hero{background:linear-gradient(120deg,#193B2A,#4E8C57);color:white;padding:10px 20px;border-radius:18px;margin-bottom:10px;}",
   ".card{background:white;border-radius:16px;padding:20px;box-shadow:0 3px 18px rgba(25,59,42,.10);margin-bottom:18px;}",
-  ".logos{display:flex;gap:12px;justify-content:flex-start;align-items:center;flex-wrap:wrap;}",
+  ".logos{display:flex;gap:12px;justify-content:left;align-items:left;flex-wrap:wrap;}",
   ".logos img{max-height:65px;max-width:35%;width:auto;border-radius:11px;padding:1px;background:rgba(255,255,255,0.25);box-shadow:0 2px 10px rgba(0,0,0,0.08);}",
   ".project-image{width:100%;max-height:320px;object-fit:contain;background:#F2F5EF;border-radius:14px;margin:8px 0;}",
   ".definition{display:flex;gap:15px;border-left:5px solid #4E8C57;background:#F4F8F2;padding:14px;margin:9px 0;border-radius:10px;}",
@@ -568,6 +801,10 @@ css <- paste0(
   ".need{border-left:5px solid #A33A45;background:#FFF3F3;padding:14px;margin:9px 0;border-radius:10px;}",
   ".natural-capital-figure{width:100%;max-width:1200px;height:auto;display:block;margin:10px auto 18px auto;border-radius:12px;background:#FFFFFF;border:1px solid #D7E4D8;padding:8px;}",
   ".metric-score-image{width:100%;max-width:950px;height:auto;display:block;margin:12px auto 20px auto;border-radius:12px;border:1px solid #D7E4D8;background:#FFFFFF;padding:6px;}",
+  ".guide-score-control{background:#F4F8F2;border:1px solid #D7E4D8;border-radius:12px;padding:14px 18px;margin:0 auto 18px auto;max-width:950px;box-shadow:0 2px 8px rgba(25,59,42,.06);}",
+  ".guide-score-control h4{margin-top:0;color:#193B2A;}",
+  ".guide-slider{margin:8px 0 16px 0;}",
+  ".guide-slider .form-group{margin-bottom:8px;}",
   ".image-missing{padding:12px;margin:10px 0;background:#FFF3F3;border-left:5px solid #A33A45;border-radius:8px;color:#7A202A;}",
   ".disclaimer-box{margin-top:18px;padding:14px 16px;background:#FFF8E8;border-left:5px solid #C49A3A;border-radius:10px;color:#26352B;font-size:0.95rem;line-height:1.55;}",
   ".disclaimer-box strong{color:#193B2A;}",
@@ -577,46 +814,68 @@ css <- paste0(
   ".copyright-notice{margin:0;padding:0;}"
 )
 
-guide_slider_specs <- list(
-  go_ecological_input = list(list(id = "ecological", label = "Ecological Condition (0-1)", min = 0, max = 1, step = 0.01, value = 0.50)),
-  go_woody_input = list(list(id = "woody", label = "Woody Vegetation Cover (0-1)", min = 0, max = 1, step = 0.01, value = 0.70)),
-  go_aggregation_input = list(list(id = "aggregation", label = "Aggregation (0-1)", min = 0, max = 1, step = 0.01, value = 0.35)),
-  go_proximity_input = list(list(id = "distance", label = "Proximity (0-1)", min = 0, max = 1, step = 0.01, value = 0.80)),
-  go_soil_input = list(
-    list(id = "soil_median", label = "Soil median cover (%)", min = 0, max = 100, step = 1, value = 70),
-    list(id = "soil_minimum", label = "Soil minimum cover (%)", min = 0, max = 100, step = 1, value = 85),
-    list(id = "soil_stability", label = "Soil stability (%)", min = 0, max = 100, step = 1, value = 70)
-  ),
-  go_riparian_input = list(list(id = "riparian", label = "Riparian Buffer Condition (%)", min = 0, max = 100, step = 1, value = 75)),
-  go_forage_input = list(list(id = "forage", label = "Forage Condition (0-1)", min = 0, max = 1, step = 0.01, value = 0.60)),
-  go_habitat_input = list(list(id = "habitat", label = "Habitat Features (0-5)", min = 0, max = 5, step = 1, value = 2)),
-  go_connectivity_input = list(list(id = "connectivity", label = "Landscape Connectivity (0-5)", min = 0, max = 5, step = 1, value = 2)),
-  go_salt_input = list(list(id = "salt", label = "Salt Affected Land Management (0-5)", min = 0, max = 5, step = 1, value = 3))
-)
-
-guide_panel <- function(title, metric_title, description, image_name, image_alt, observations, score_text, link_id, link_text) {
-  sliders <- guide_slider_specs[[link_id]]
-  slider_ui <- if (!is.null(sliders)) {
-    tagList(
-      h4("Quick score entry"),
-      lapply(sliders, function(s) {
-        sliderInput(inputId = s$id, label = s$label, min = s$min, max = s$max,
-                    value = s$value, step = s$step, width = "100%")
-      })
+guide_panel <- function(title, metric_title, description, image_name, image_alt, observations, score_text, slider_specs) {
+  slider_ui <- lapply(slider_specs, function(s) {
+    div(
+      class = "guide-slider",
+      sliderInput(
+        inputId = s$id,
+        label = s$label,
+        min = s$min,
+        max = s$max,
+        value = s$value,
+        step = s$step,
+        width = "100%"
+      )
     )
-  } else NULL
+  })
+  
+  # metric_guidance uses the internal metric keys, while the scoring-guide
+  # headings use producer-friendly metric labels. Match through metric_labels
+  # so the detailed guidance is always retrieved correctly.
+  metric_key <- metric_keys[match(metric_title, metric_labels)]
+  if (is.na(metric_key) || !nzchar(metric_key)) metric_key <- metric_title
+  g <- metric_guidance[match(metric_key, metric_guidance$Metric), , drop = FALSE]
+  
+  get_guidance <- function(column) {
+    if (!nrow(g)) return("Guidance not available.")
+    value <- as.character(g[[column]][1])
+    if (is.na(value) || !nzchar(trimws(value))) "Guidance not available." else value
+  }
+  
+  why <- get_guidance("Why_it_matters")
+  context <- get_guidance("Context")
+  actions <- get_guidance("Actions")
+  mechanism <- get_guidance("Mechanism")
+  expected <- get_guidance("Expected_outcome")
+  monitoring <- get_guidance("Monitoring")
   
   bslib::accordion_panel(
     title,
     h3(metric_title),
+    h4("What is this metric?"),
     p(description),
+    h4("Why does it matter?"),
+    p(why),
+    h4("Context and interpretation"),
+    p(context),
     metric_score_image(image_name, image_alt),
-    slider_ui,
+    div(
+      class = "guide-score-control",
+      h4("Set your score"),
+      slider_ui
+    ),
+    p(score_text),
     h4("What to look for"),
     tags$ul(lapply(observations, tags$li)),
-    h4("Score to enter"),
-    p(score_text),
-    actionLink(link_id, link_text)
+    h4("What can you do?"),
+    p(actions),
+    h4("Mechanism"),
+    p(mechanism),
+    h4("Expected outcome"),
+    p(expected),
+    h4("What should you monitor?"),
+    p(monitoring)
   )
 }
 
@@ -630,7 +889,7 @@ definitions_ui <- tagList(
   })
 )
 
-# END OF PART 1 - CONTINUE WITH PART 2
+# Application UI begins here
 # Copyright © 2026 All rights reserved.
 # ============================================================
 
@@ -642,16 +901,16 @@ ui <- fluidPage(
     primary = brand$dark,
     secondary = brand$green
   ),
-  tags$head(tags$style(HTML(css)), tags$script(HTML("(function () {\n  function registerDownload() {\n    if (!window.Shiny || !Shiny.addCustomMessageHandler) {\n      setTimeout(registerDownload, 100); return;\n    }\n    Shiny.addCustomMessageHandler('natcap_download', function (message) {\n      try {\n        const binary = atob(message.data);\n        const bytes = new Uint8Array(binary.length);\n        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);\n        const url = URL.createObjectURL(new Blob([bytes], {type: message.mime}));\n        const link = document.createElement('a');\n        link.href = url; link.download = message.filename;\n        document.body.appendChild(link); link.click(); link.remove();\n        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);\n      } catch (error) { window.alert('PDF download failed: ' + error.message); }\n    });\n  }\n  registerDownload();\n})();"))),
+  tags$head(tags$style(HTML(css))),
   
   div(
     class = "hero",
     fluidRow(
       column(
         8,
-        # SusSheepSys.webp header image — adjustable size and rounded edges
+        # SusSheepSys header image — adjustable size and rounded edges
         tags$img(
-          src = asset("SusSheepSys.webp"),
+          src = asset("SusSheepSys.png"),
           
           style = paste0(
             "width: 450px;",          # Adjust width
@@ -662,13 +921,13 @@ ui <- fluidPage(
             "display: block;"
           )
         ),
-        p("Natural-capital metrics assessment.")
+        p("Natural-capital assessment and reporting.")
       ),
       column(
         4,
         div(
           class = "logos",
-          # SheepLogo2.webp — top-right header position
+          # SheepLogo2.png — top-right header position
           tags$div(
             style = paste0(
               "display:flex;",
@@ -680,8 +939,8 @@ ui <- fluidPage(
             ),
             
             tags$img(
-              src = if (nzchar(asset("SheepLogo2.webp"))) {
-                asset("SheepLogo2.webp")
+              src = if (nzchar(asset("SheepLogo2.png"))) {
+                asset("SheepLogo2.png")
               } else {
                 fallback
               },
@@ -736,7 +995,7 @@ ui <- fluidPage(
             )
           )
         ),
-        column(5, div(class = "card", h3(""), project_video(asset("SheepVideo.mp4"))))
+        column(5, div(class = "card", h3(""), project_video(asset("SheepVideo.mov"))))
       ),
       div(
         class = "card",
@@ -753,7 +1012,8 @@ ui <- fluidPage(
       div(
         class = "card",
         h2("Natural Capital Scoring Guides"),
-        p("Use these visual guides before completing the Farm inputs tab. They are intended to help producers make consistent, practical farm-scale estimates of natural-capital condition."),
+        p("Use these visual guides to assess the image-backed natural asset and land-condition metrics. Each guide explains what the metric means, why it matters, what to look for, how to score it, practical actions, the management mechanism and what to monitor. Metrics without a scoring-guide image are entered in Farm & Management Inputs."),
+        div(class = "disclaimer-box", tags$strong("Natural asset / condition focus: "), "Ecological Condition, Woody Vegetation Cover, Aggregation, Proximity, Soil Condition, Riparian Buffer Condition, Forage Condition, Native Vegetation Extent, Habitat Features, Landscape Connectivity and Salt Affected Land Management are treated as natural asset or land-condition indicators. Salt-affected land is included here because salinity is a land-condition constraint; the score still recognises the importance of management response."),
         div(
           class = "disclaimer-box",
           tags$strong("Important: "),
@@ -769,133 +1029,127 @@ ui <- fluidPage(
             "1. Ecological Condition",
             "Ecological Condition",
             "Ecological condition describes how closely an area resembles a healthy native ecosystem. Consider vegetation cover, plant diversity, trees and shrubs, habitat features, soil condition, weeds and signs of disturbance.",
-            "Ecological Condition.webp",
+            "Ecological Condition.png",
             "Ecological condition scoring guide",
             c("Amount and continuity of native vegetation cover", "Presence of trees, shrubs, native grasses and groundcover", "Evidence of erosion, bare soil, compaction or disturbance", "Weed dominance or loss of native species", "Habitat complexity, including logs, litter, hollows and mature trees"),
-            "Enter a score from 0 to 1 in Farm inputs. A score near 0 represents severely modified or degraded land; a score near 1 represents a healthy, minimally modified native ecosystem.",
-            "go_ecological_input",
-            "Go to Farm inputs to enter Ecological Condition"
+            "Set the Ecological Condition score using the slider directly below the image. A score near 0 represents severely modified or degraded land; a score near 1 represents a healthy, minimally modified native ecosystem.",
+            list(list(id = "ecological", label = "Ecological Condition (0-1)", min = 0, max = 1, value = 0.50, step = 0.01))
           ),
           
           guide_panel(
             "2. Woody Vegetation Cover",
             "Woody Vegetation Cover",
             "Woody vegetation cover is the percentage of the farm occupied by trees, shrubs, native bushland, shelterbelts, revegetation and other woody vegetation.",
-            "Woody Vegetation Cover.webp",
+            "Woody Vegetation Cover.png",
             "Woody vegetation cover scoring guide",
             c("Remnant native woodland, shrubland or forest", "Shelterbelts and planted vegetation", "Scattered paddock trees and shrub patches", "Woody vegetation along drainage lines, dams and waterways", "Total woody vegetation area relative to total farm area"),
-            "Enter a score from 0 to 1 for woody vegetation cover. For example, 0.10 means approximately 10% of the farm has tree or shrub cover; 0.70 means approximately 70% of the farm has woody cover.",
-            "go_woody_input",
-            "Go to Farm inputs to enter Woody Vegetation Cover"
+            "Enter the estimated percentage of total farm area covered by woody vegetation. For example, 10 means approximately 10% of the farm has tree or shrub cover.",
+            list(list(id = "woody", label = "Woody Vegetation Cover (%)", min = 0, max = 100, value = 70, step = 1))
           ),
           
           guide_panel(
             "3. Aggregation",
-            "Aggregation of Woody Vegetation",
+            "Aggregation",
             "Aggregation describes whether woody vegetation is retained in large, connected patches or divided into many small and isolated fragments. The score represents the concentration and consolidation of woody vegetation across the farm, rather than the total amount of woody cover.",
-            "Aggregation.webp",
+            "Aggregation.png",
             "Aggregation scoring guide",
             c("Whether woody vegetation occurs in one or several large patches", "The presence of isolated small remnants versus consolidated vegetation", "The amount of interior habitat away from patch edges", "Fragmentation caused by clearing, tracks, cultivation or infrastructure", "Opportunities to protect large remnants or reconnect smaller patches"),
             "Enter a score from 0 to 1. A score near 0 represents strongly fragmented or dispersed woody vegetation; a score near 1 represents woody vegetation concentrated in large, contiguous patches.",
-            "go_aggregation_input",
-            "Go to Farm inputs to enter Aggregation"
+            list(list(id = "aggregation", label = "Aggregation (0-1)", min = 0, max = 1, value = 0.35, step = 0.01))
           ),
           
           guide_panel(
             "4. Proximity to Woody Vegetation",
             "Proximity",
             "Proximity measures how close production areas are to trees and shrubs. Shorter distances can improve livestock access to shade and shelter and increase the reach of ecosystem services such as pollination and pest control.",
-            "Proximity.webp",
+            "Proximity.png",
             "Proximity scoring guide",
             c("Distance from grazed paddocks to trees, shrubs or shelterbelts", "Accessibility of shade and shelter for sheep", "Whether vegetation is distributed across the farm or confined to one area", "Distance from lambing paddocks and stock congregation areas to shelter"),
-            "Enter a proximity score from 0 to 1. A score near 0 indicates that production areas are far from woody vegetation; a score near 1 indicates that shade, shelter and woody habitat are close and accessible to production areas.",
-            "go_proximity_input",
-            "Go to Farm inputs to enter Proximity"
+            "Enter the approximate mean straight-line distance in metres from the centre of production paddocks to the nearest tree line or woody vegetation patch. The scoring follows the guide shown above: distances below 300 m are scored 0.70-1.00, 300-500 m are scored 0.40-0.69, and distances above 500 m are scored 0-0.39, declining to 0 at 1,000 m.",
+            list(list(id = "distance", label = "Mean straight-line distance from production paddocks to woody vegetation (m)", min = 0, max = 1000, value = 300, step = 1))
           ),
           
           guide_panel(
             "5. Soil Condition",
             "Soil Condition",
             "Soil condition is represented in this tool using ground cover and soil stability indicators. Good cover helps reduce erosion, improve infiltration, protect soil organic matter and support pasture production.",
-            "Soil Condition.webp",
+            "Soil Condition.png",
             "Soil condition scoring guide",
             c("Median or typical ground cover across seasons", "Lowest ground cover during the most vulnerable period", "Bare soil, erosion, scalding or runoff pathways", "Litter, stubble, living pasture and other protective cover", "Signs that soil remains stable under grazing and rainfall"),
             "Enter estimated percentages for median ground cover, minimum ground cover and soil stability. The tool averages these three values to generate the Soil Condition score.",
-            "go_soil_input",
-            "Go to Farm inputs to enter Soil Condition"
+            list(
+              list(id = "soil_median", label = "Median / typical ground cover (%)", min = 0, max = 100, value = 70, step = 1),
+              list(id = "soil_minimum", label = "Minimum ground cover (%)", min = 0, max = 100, value = 85, step = 1),
+              list(id = "soil_stability", label = "Soil stability (%)", min = 0, max = 100, value = 70, step = 1)
+            )
           ),
           
           guide_panel(
             "6. Riparian Condition",
             "Riparian Buffer Condition",
             "Riparian condition refers to vegetation along waterways, drainage lines, wetlands, dams and other water-associated areas. Healthy buffers help protect water quality, stabilise banks and provide habitat.",
-            "Riparian Condition.webp",
+            "Riparian Condition.png",
             "Riparian condition scoring guide",
             c("Woody vegetation beside streams, drainage lines and wetlands", "Vegetation continuity along riparian areas", "Bare banks, erosion, pugging or heavy stock access", "Gaps requiring fencing, revegetation or grazing management", "Evidence that the buffer filters sediment and slows runoff"),
             "Enter the estimated percentage of mapped riparian area with woody vegetation cover. If the farm has no riparian areas, record this limitation in the assessment notes.",
-            "go_riparian_input",
-            "Go to Farm inputs to enter Riparian Condition"
+            list(list(id = "riparian", label = "Riparian woody vegetation cover (%)", min = 0, max = 100, value = 75, step = 1))
           ),
           
           guide_panel(
             "7. Forage Condition",
             "Forage Condition",
             "Forage condition reflects the quality, persistence, palatability and productivity of pasture available to livestock. It is distinct from short-term feed quantity because it considers the condition of the pasture resource.",
-            "Forage Condition.webp",
+            "Forage Condition.png",
             "Forage condition scoring guide",
             c("Pasture cover, productivity and persistence", "Perennial species and desirable pasture composition", "Palatability and feed quality for sheep", "Evidence of repeated overgrazing or pasture decline", "Capacity to maintain feed and ground cover during dry periods"),
             "Enter a score from 0 to 1. A score near 0 indicates poor or degraded forage resources; a score near 1 indicates productive, persistent and resilient pasture.",
-            "go_forage_input",
-            "Go to Farm inputs to enter Forage Condition"
+            list(list(id = "forage", label = "Forage Condition (0-1)", min = 0, max = 1, value = 0.60, step = 0.01))
           ),
           
           guide_panel(
             "8. Habitat Condition",
             "Habitat Features",
             "Habitat condition captures the diversity of structural features used by wildlife, including mature trees, hollows, shrubs, litter, rocks, logs, native grasses and dense ground cover.",
-            "Habitat Condition.webp",
+            "Habitat Condition.png",
             "Habitat condition scoring guide",
             c("Old trees, tree hollows and standing dead trees where safe to retain", "Fallen timber, logs, leaf litter and rocks", "Native shrubs, grasses and flowering plants", "Multiple vegetation layers from groundcover to canopy", "Habitat features distributed across the farm rather than isolated"),
             "Enter a score from 0 to 5 for Habitat Features. A score of 0 represents very limited habitat structure, while 5 represents diverse and well-retained habitat features.",
-            "go_habitat_input",
-            "Go to Farm inputs to enter Habitat Features"
+            list(list(id = "habitat", label = "Habitat Features (0-5)", min = 0, max = 5, value = 2, step = 1))
           ),
           
           guide_panel(
             "9. Landscape Connectivity",
             "Landscape Connectivity",
             "Landscape connectivity describes how well vegetation and habitat patches are linked across the farm and into the wider landscape. Connected areas can support wildlife movement, dispersal, gene flow, pollination, pest suppression and ecological resilience.",
-            "Landscape Connectivity.webp",
+            "Landscape Connectivity.png",
             "Landscape connectivity scoring guide",
             c("Continuous native vegetation, shelterbelts or riparian corridors", "Stepping-stone patches that link larger remnants", "Gaps between habitat patches and barriers to movement", "Connections between on-farm vegetation and neighbouring bushland", "Opportunities for corridor plantings, buffer restoration or protection of linkages"),
             "Enter a score from 0 to 5. A score of 0 represents isolated habitat with little functional linkage; a score of 5 represents a well-connected network of habitat patches across the farm and surrounding landscape.",
-            "go_connectivity_input",
-            "Go to Farm inputs to enter Landscape Connectivity"
+            list(list(id = "connectivity", label = "Landscape Connectivity (0-5)", min = 0, max = 5, value = 2, step = 1))
           ),
           
           guide_panel(
             "10. Salt Affected Land Management",
             "Salt Affected Land Management",
             "This metric considers how salt-affected areas are managed to maintain ground cover and productive use while limiting further degradation. It focuses on practical management, not simply the area of saline land.",
-            "Saltlands.webp",
+            "Saltlands.png",
             "Salt affected land management scoring guide",
             c("Salt-affected areas are identified and monitored", "Fencing or controlled grazing protects vulnerable saline land", "Salt-tolerant species or suitable saltland pastures are established where appropriate", "Bare saline patches, erosion and grazing pressure are actively managed", "Management is reviewed and adapted to local soil, water and seasonal conditions"),
             "Enter a management score from 0 to 5. A low score indicates little planning or active management; a high score indicates an established, monitored and adaptive approach. If no salt-affected land is known, use the score that best reflects whether risk has been assessed and the absence of affected areas verified.",
-            "go_salt_input",
-            "Go to Farm inputs to enter Salt Affected Land Management"
+            list(list(id = "salt", label = "Salt Affected Land Management (0-5)", min = 0, max = 5, value = 3, step = 1))
           )
         ),
         
         br(),
         div(
           style = "text-align:center;",
-          actionButton("go_to_farm_inputs", "Continue to Farm Inputs", class = "btn-primary btn-lg")
+          actionButton("go_to_farm_inputs", "Continue to Farm & Management Inputs", class = "btn-primary btn-lg")
         )
       )
     ),
     
     tabPanel(
-      "Farm inputs",
+      "Farm & Management Inputs",
       div(
         class = "card",
         h3("Farm information"),
@@ -909,7 +1163,7 @@ ui <- fluidPage(
         div(
           class = "disclaimer-box",
           tags$strong("Scoring assistance: "),
-          "Use the Scoring guides tab before entering values. The guides provide visual examples for Ecological Condition, Woody Vegetation Cover, Aggregation, Proximity, Soil Condition, Riparian Condition, Forage Condition, Habitat Features, Landscape Connectivity and Salt Affected Land Management."
+          "The image-backed natural asset and land-condition metrics are scored directly on the Scoring guides page using sliders. Use this page for the remaining farm and management inputs that do not have a scoring-guide image."
         ),
         uiOutput("inputs"),
         br(),
@@ -922,19 +1176,16 @@ ui <- fluidPage(
     
     tabPanel(
       "Results",
-      div(class = "card",
-          h2(textOutput("overall")),
-          p(textOutput("overall_band")),
-          p("Results display version: HTML-26", style = "font-size:0.85rem;color:#667267;"),
-          h3("All 26 individual metric results"),
-          p(textOutput("metric_row_count_html")),
-          uiOutput("metric_results_html"),
-          tags$hr(),
-          h3("Seven domain summaries"),
-          p("Domains group related metrics; they are not the individual metric list."),
-          uiOutput("domain_results_html"),
-          tags$hr(),
-          plotlyOutput("plot", height = "450px")
+      div(
+        class = "card",
+        h2(textOutput("overall")),
+        p(textOutput("overall_band")),
+        DTOutput("metrics"),
+        h3("Why these scores?"),
+        p("Use the explanations below to connect each score with the underlying concept, context, management mechanism and practical monitoring. The score is a screening result based on the information entered by the user."),
+        uiOutput("score_explanations"),
+        DTOutput("domains"),
+        uiOutput("plot")
       )
     ),
     
@@ -942,9 +1193,11 @@ ui <- fluidPage(
       "Recommendations",
       div(
         class = "card",
-        h2("What works well"),
+        h2("Strengths to maintain"),
+        p("Metrics at or above 60 are presented as areas to maintain or strengthen. A high score does not mean no further action is needed; continue monitoring and adapt management to seasonal and farm-specific conditions."),
         uiOutput("works"),
-        h2("What needs improvement"),
+        h2("Where management attention may help"),
+        p("Metrics below 60 are presented as potential areas for management attention. The score is a screening indicator, so use the context, mechanism and farm circumstances before deciding whether an action is appropriate."),
         uiOutput("needs")
       )
     ),
@@ -960,8 +1213,12 @@ ui <- fluidPage(
         class = "card",
         h2("Methods, equations and calculations"),
         p("The app combines farm-entered proxies with farm-scale natural-capital accounting concepts. Results are screening indicators and do not replace GIS analysis, field validation, emissions accounting or professional farm planning."),
+        h3("Scoring and interpretation"),
+        DTOutput("score_methods"),
         h3("Metric definitions"),
         DTOutput("method_metrics"),
+        h3("Detailed metric guidance"),
+        DTOutput("metric_guidance_table"),
         h3("References"),
         uiOutput("reference_links")
       )
@@ -972,11 +1229,8 @@ ui <- fluidPage(
       div(
         class = "card",
         h2("Full PDF report"),
-        p("The PDF report includes an executive abstract, farm profile, domain and metric figures, results tables, strengths, improvement plan, references, interpretation and contact details."),
-        actionButton("pdf_browser", "Download full PDF report", icon = icon("download")),
-        br(),
-        br(),
-        actionButton(   "xlsx_browser",   "Download Excel workbook",   icon = icon("download") ),
+        p("The professional PDF report presents the farm profile, scoring-guide inputs, domain results, all 26 metric results and descriptions, integrated management priorities, monitoring actions, references and the assessment limitations. "),
+        downloadButton("pdf", "Download full PDF report"),
         div(class = "disclaimer-box", tags$strong("Disclaimer: "), disclaimer_text)
       )
     ),
@@ -990,7 +1244,7 @@ ui <- fluidPage(
     ##
     ##         h3("Creator & Owner"),
     ##         p(tags$strong("Dr Aram Ali"), ", Green Sheep Project Manager"),
-    ##         p("Email: aali@wheatbeltnrm.org.au, a.aramali@outlook.com"),
+    ##         p("Email: aali@wheatbeltnrm.org.au"),
     ##         p("Mobile: 0470 488 185"),
     ##
     ##         h3("Affiliation"),
@@ -1022,7 +1276,7 @@ ui <- fluidPage(
     ##              "The Tool provides indicative screening information only and does not replace professional advice, field validation, or formal natural capital accounting.",
     ##              tags$br(),
     ##              tags$strong("Copyright: "),
-    ##              "(c) Copyright: All rights reserved. Free use for personal, non-commercial farm assessment. Contact aali@wheatbeltnrm.org.au.")
+    ##              "© 2026 All rights reserved. Free use for personal, non-commercial farm assessment. Contact aali@wheatbeltnrm.org.au.")
     ##       )
     ##     ),
     
@@ -1030,50 +1284,45 @@ ui <- fluidPage(
       "Contact",
       div(
         class = "card",
-        fluidRow(
-          column(
-            7,
+        div(
+          style = "display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:24px;",
+          div(
+            style = "flex:1 1 300px; min-width:0;",
             h2(contact$name),
             p(contact$role),
             p(contact$email),
             p(contact$mobile),
-            p(contact$address)
+            p(contact$address),
           ),
-          column(
-            5,
-            div(
-              style = "display:flex; justify-content:flex-end; align-items:center; gap:14px; flex-wrap:wrap; padding:10px;",
-              tags$img(
-                src = if (nzchar(asset("GSP_Logo.webp"))) asset("GSP_Logo.webp") else fallback,
-                alt = "Green Sheep Project logo",
-                # MANUAL SIZE SETTINGS: edit the width and height values for the GSP logo.
-                style = paste0(
-                  "width: 180px;",   # Adjust GSP logo width here.
-                  "height: 140px;",  # Adjust GSP logo height here.
-                  "max-width: 100%;",
-                  "object-fit: contain;",
-                  "display: inline-block;"
-                )
-              ),
-              tags$img(
-                src = if (nzchar(asset("WNRM2.webp"))) asset("WNRM2.webp") else fallback,
-                alt = "Wheatbelt Natural Resource Management logo",
-                # MANUAL SIZE SETTINGS: edit the width and height values for the WNRM logo.
-                style = paste0(
-                  "width: 220px;",   # Adjust WNRM logo width here.
-                  "height: 160px;",  # Adjust WNRM logo height here.
-                  "max-width: 100%;",
-                  "object-fit: contain;",
-                  "display: inline-block;"
-                )
+          div(
+            style = "display:flex; flex:0 1 auto; align-items:center; justify-content:center; flex-wrap:wrap; gap:16px;",
+            tags$img(
+              src = if (nzchar(asset("GSP_Logo.webp"))) asset("GSP_Logo.webp") else fallback,
+              alt = "Green Sheep Project logo",
+              # MANUAL SIZE SETTINGS: edit GSP logo dimensions here.
+              style = paste0(
+                "width:180px;",  # GSP logo width
+                "height:140px;", # GSP logo height
+                "max-width:100%;object-fit:contain;display:inline-block;"
+              )
+            ),
+            tags$img(
+              src = if (nzchar(asset("WNRM2.webp"))) asset("WNRM2.webp") else fallback,
+              alt = "Wheatbelt Natural Resource Management logo",
+              # MANUAL SIZE SETTINGS: edit WNRM logo dimensions here.
+              style = paste0(
+                "width:220px;",  # WNRM logo width
+                "height:160px;", # WNRM logo height
+                "max-width:100%;object-fit:contain;display:inline-block;"
               )
             )
           )
         ),
+        
         div(
           style = "text-align: center; margin-top: 20px;",
           tags$img(
-            src = if (nzchar(asset("SheepMerin.webp"))) asset("SheepMerin.webp") else fallback,
+            src = if (nzchar(asset("SheepMerin.png"))) asset("SheepMerin.png") else if (nzchar(asset("SheepMerin.png"))) asset("SheepMerin.png") else fallback,
             alt = "Lamb image",
             style = "width: 900px; max-width: 100%; height: auto; border-radius: 30px; display: inline-block; object-fit: cover;"
           )
@@ -1083,11 +1332,11 @@ ui <- fluidPage(
     
     
     # Copyright footer on every page
-    footer = tags$div(
+    tags$div(
       class = "app-footer",
       tags$p(
         class = "copyright-notice",
-        "(c) Copyright: All rights reserved. Free use for personal, non-commercial farm assessment. Contact aali@wheatbeltnrm.org.au | ",
+        "© 2026 All rights reserved. Free use for personal, non-commercial farm assessment. Contact aali@wheatbeltnrm.org.au | ",
         tags$a(href = "#", onclick = "Shiny.setInputValue('show_terms', Math.random()); return false;", "Terms of Use", style = "color: #2F5D3A;"),
         " | Green Sheep Project Manager"
       )
@@ -1106,7 +1355,7 @@ server <- function(input, output, session) {
       tags$div(
         style = "text-align: left; font-size: 0.9rem; line-height: 1.6;",
         tags$h4("© 2026. All rights reserved."),
-        tags$p("The Natural Capital Assessment Tool is owned by Dr Aram Ali with permission for non-commercial, producer-friendly use."),
+        tags$p("The Natural Capital Assessment Tool is for non-commercial, producer-friendly use."),
         tags$h5("Permitted Use:"),
         tags$ul(
           tags$li("Free use for personal, non-commercial farm assessment"),
@@ -1116,7 +1365,6 @@ server <- function(input, output, session) {
         tags$h5("Prohibited Use:"),
         tags$ul(
           tags$li("Copying or reproducing source code"),
-          tags$li("Creating derivative works"),
           tags$li("Commercial use without permission"),
           tags$li("Removing copyright notices")
         ),
@@ -1126,67 +1374,47 @@ server <- function(input, output, session) {
   })
   
   
-  observeEvent(input$go_to_farm_inputs, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_ecological_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_woody_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_aggregation_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_proximity_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_soil_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_riparian_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_forage_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_habitat_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_connectivity_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
-  observeEvent(input$go_salt_input, { updateNavbarPage(session, "tabs", selected = "Farm inputs") })
+  observeEvent(input$go_to_farm_inputs, { updateNavbarPage(session, "tabs", selected = "Farm & Management Inputs") })
   
-  # Farm-input metrics remain on the Farm inputs page. Metrics with scoring-guide
-  # sliders are read from those sliders and combined in one assessment object.
-  farm_ids <- c("native", "shade", "water", "ghg", "drought", "nutrient", "feed", "welfare", "pasture", "health", "biosecurity", "lambing", "people", "business", "community")
-  farm_labels <- c("Native vegetation (%)", "Shade and Shelter (0-5)", "Waterpoint Condition (0-5)", "GHG Climate Plan (0-5)", "Drought Preparedness (0-5)", "Nutrient Efficiency (0-5)", "Feed Efficiency (0-5)", "Animal Welfare (0-5)", "Pasture Planning (0-5)", "Animal Health (0-5)", "Biosecurity (0-5)", "Lambing Management (0-5)", "People and Safety (0-5)", "Business Resilience (0-5)", "Community Engagement (0-5)")
-  farm_defaults <- c(15, 5, 5, 1, 3, 3, 3, 4, 3, 4, 3, 3, 4, 3, 3)
-  farm_mins <- c(0, rep(0, 14))
-  farm_maxs <- c(100, rep(5, 14))
-  farm_steps <- c(1, rep(1, 14))
+  ids <- c("ecological", "woody", "aggregation", "distance", "soil_median", "soil_minimum", "soil_stability",
+           "riparian", "forage", "native", "habitat", "connectivity", "shade", "water", "ghg", "drought",
+           "nutrient", "feed", "welfare", "pasture", "health", "biosecurity", "lambing", "people", "business", "community", "salt")
+  
+  labels <- c("Ecological Condition (0-1)", "Woody Vegetation Cover (%)", "Aggregation (0-1)",
+              "Proximity (Mean straight-line distance to woody vegetation) (m)", "Soil median cover (%)", "Soil minimum cover (%)",
+              "Soil stability (%)", "Riparian Buffer Condition (%)", "Forage Condition (0-1)", "Native vegetation (%)",
+              "Habitat Features (0-5)", "Landscape Connectivity (0-5)", "Shade and Shelter (0-5)", "Waterpoint Condition (0-5)",
+              "GHG / Climate Plan (0-5)", "Drought Preparedness (0-5)", "Nutrient Efficiency (0-5)", "Feed Efficiency (0-5)",
+              "Animal Welfare (0-5)", "Pasture Planning (0-5)", "Animal Health (0-5)", "Biosecurity (0-5)",
+              "Lambing Management (0-5)", "People and Safety (0-5)", "Business Resilience (0-5)",
+              "Community Engagement (0-5)", "Salt Affected Land Management (0-5)")
+  
+  defaults <- c(0.50, 70, 0.35, 300, 70, 85, 70, 75, 0.6, 15, 2, 2, 5, 5, 1, 3, 3, 3, 4, 3, 4, 3, 3, 4, 3, 3, 3)
+  mins <- c(0, 0, 0, 0, rep(0, 23))
+  maxs <- c(1, 100, 1, 1000, 100, 100, 100, 100, 1, 100, rep(5, 17))
+  steps <- c(0.01, 1, 0.01, 1, 1, 1, 1, 1, 0.01, 1, rep(1, 17))
+  
+  scoring_ids <- c("ecological", "woody", "aggregation", "distance", "soil_median", "soil_minimum", "soil_stability",
+                   "riparian", "forage", "habitat", "connectivity", "salt")
+  farm_ids <- setdiff(ids, scoring_ids)
+  
+  if (length(ids) != length(labels) || length(ids) != length(defaults) ||
+      length(ids) != length(mins) || length(ids) != length(maxs) ||
+      length(ids) != length(steps)) {
+    stop("Farm-input configuration error: ids, labels, defaults, mins, maxs and steps must have identical lengths.")
+  }
   
   output$inputs <- renderUI({
-    tagList(lapply(seq_along(farm_ids), function(i) {
-      numericInput(
-        inputId = farm_ids[i], label = farm_labels[i], value = farm_defaults[i],
-        min = farm_mins[i], max = farm_maxs[i], step = farm_steps[i]
-      )
+    tagList(lapply(farm_ids, function(id) {
+      i <- match(id, ids)
+      numericInput(inputId = ids[i], label = labels[i], value = defaults[i], min = mins[i], max = maxs[i], step = steps[i])
     }))
   })
   
-  guide_defaults <- list(
-    ecological = 0.50, woody = 0.70, aggregation = 0.35, distance = 0.80,
-    soil_median = 70, soil_minimum = 85, soil_stability = 70, riparian = 75,
-    forage = 0.60, habitat = 2, connectivity = 2, salt = 3
-  )
-  
-  input_or_default <- function(id, default) {
-    value <- input[[id]]
-    if (is.null(value) || length(value) != 1L || is.na(value)) return(default)
-    if (is.numeric(default)) {
-      number <- suppressWarnings(as.numeric(value))
-      if (!is.finite(number)) return(default)
-      return(number)
-    }
-    value <- trimws(as.character(value))
-    if (!nzchar(value)) default else value
-  }
-  
   current <- reactive({
-    guide_values <- lapply(names(guide_defaults), function(id) input_or_default(id, guide_defaults[[id]]))
-    names(guide_values) <- names(guide_defaults)
-    farm_values <- lapply(seq_along(farm_ids), function(i) input_or_default(farm_ids[i], farm_defaults[i]))
-    names(farm_values) <- farm_ids
-    
-    c(list(
-      farm_name = input_or_default("farm_name", "Farm self-assessment"),
-      system = input_or_default("system", "Self-Replacing Merino"),
-      area = input_or_default("area", 5000),
-      stocking = input_or_default("stocking", 20),
-      capacity = input_or_default("capacity", 5)
-    ), guide_values, farm_values)
+    as.list(c(list(farm_name = input$farm_name, system = input$system, area = input$area,
+                   stocking = input$stocking, capacity = input$capacity),
+              setNames(lapply(ids, function(z) input[[z]]), ids)))
   })
   
   assessment <- eventReactive(input$run, {
@@ -1202,636 +1430,970 @@ server <- function(input, output, session) {
   
   output$overall <- renderText({ req(assessment()); paste0("Overall score: ", round(safe_mean(assessment()$domains$Score), 1), "/100") })
   output$overall_band <- renderText({ req(assessment()); paste0("Interpretation: ", band(safe_mean(assessment()$domains$Score))) })
-  html_results_table <- function(d, caption) {
-    shown <- lapply(d, function(column) {
-      if (is.numeric(column)) {
-        vapply(column, function(value) {
-          if (!is.finite(value)) "Not available" else format(value, trim = TRUE, scientific = FALSE)
-        }, character(1))
-      } else {
-        column <- as.character(column)
-        column[is.na(column)] <- "Not available"
-        column
-      }
-    })
-    div(style = "width:100%;overflow-x:auto;",
-        tags$table(class = "table table-striped table-hover table-bordered",
-                   style = "width:100%;margin-bottom:20px;",
-                   tags$caption(caption),
-                   tags$thead(tags$tr(lapply(names(d), function(label) tags$th(scope = "col", label)))),
-                   tags$tbody(lapply(seq_len(nrow(d)), function(i) {
-                     tags$tr(lapply(shown, function(column) tags$td(column[[i]])))
-                   }))
-        )
-    )
-  }
+  output$metrics <- renderDT({ req(assessment()); datatable(assessment()$metrics, rownames = FALSE, options = list(pageLength = 12, scrollX = TRUE)) })
+  output$domains <- renderDT({ req(assessment()); datatable(assessment()$domains, rownames = FALSE) })
   
-  output$metric_row_count_html <- renderText({
-    req(assessment())
-    d <- assessment()$metrics
-    validate(need(is.data.frame(d), "Metric results are not available."))
-    paste0("Individual metrics available: ", nrow(d), " of ", length(metric_keys), ".")
-  })
-  
-  output$metric_results_html <- renderUI({
-    req(assessment())
-    d <- assessment()$metrics
-    validate(
-      need(is.data.frame(d) && nrow(d) > 0, "Run an assessment to view metric results."),
-      need(all(c("Metric", "Raw", "Score", "Interpretation") %in% names(d)),
-           "Metric results do not contain the expected columns."),
-      need(nrow(d) == length(metric_keys) && setequal(d$Metric, metric_keys),
-           "The assessment did not return all 26 metrics. Please rerun the assessment.")
-    )
-    d <- d[match(metric_keys, d$Metric), , drop = FALSE]
-    display <- data.frame(
-      Metric = metric_labels[match(d$Metric, metric_keys)],
-      `Raw value (0-1)` = d$Raw, `Score (/100)` = d$Score,
-      Interpretation = d$Interpretation,
-      check.names = FALSE, stringsAsFactors = FALSE
-    )
-    html_results_table(display, "All individual metrics; no pagination or hidden rows.")
-  })
-  
-  output$domain_results_html <- renderUI({
+  # Dependency-free SVG radar chart. Preserves the seven domain scores and
+  # their 0-100 scale without downloading plotly, ggplot2 or htmlwidgets.
+  output$plot <- renderUI({
     req(assessment())
     d <- assessment()$domains
-    validate(need(is.data.frame(d) && nrow(d) > 0, "No domain results are available."))
-    display <- data.frame(
-      Domain = d$Domain, `Score (/100)` = d$Score,
-      Interpretation = d$Interpretation,
-      check.names = FALSE, stringsAsFactors = FALSE
+    n <- nrow(d)
+    if (n < 3L) return(NULL)
+    scores <- pmax(0, pmin(100, as.numeric(d$Score)))
+    angles <- (seq_len(n) - 1) * 2 * pi / n - pi / 2
+    cx <- 310; cy <- 255; radius <- 165
+    xy <- function(r) cbind(cx + r * cos(angles), cy + r * sin(angles))
+    pts <- function(m) paste(apply(round(m, 1), 1, paste, collapse = ","), collapse = " ")
+    rings <- vapply(c(20, 40, 60, 80, 100), function(level) {
+      sprintf('<polygon points="%s" fill="none" stroke="#d7e4d8" stroke-width="1"/>',
+              pts(xy(radius * level / 100)))
+    }, character(1))
+    spokes <- vapply(seq_len(n), function(i) {
+      pos <- xy(radius)[i, ]
+      sprintf('<line x1="%s" y1="%s" x2="%.1f" y2="%.1f" stroke="#d7e4d8"/>',
+              cx, cy, pos[1], pos[2])
+    }, character(1))
+    label_pos <- xy(radius + 30)
+    labels <- vapply(seq_len(n), function(i) {
+      # Domain labels are fixed strings defined by the application.
+      lab <- htmltools::htmlEscape(as.character(d$Domain[i]))
+      sprintf('<text x="%.1f" y="%.1f" text-anchor="middle" font-size="10" fill="#26352B">%s</text>',
+              label_pos[i, 1], label_pos[i, 2], lab)
+    }, character(1))
+    values <- vapply(seq_len(n), function(i) {
+      pos <- xy(radius * scores / 100)[i, ]
+      sprintf('<circle cx="%.1f" cy="%.1f" r="5" fill="#2F5D3A"><title>%s: %.1f/100</title></circle>',
+              pos[1], pos[2], htmltools::htmlEscape(as.character(d$Domain[i])), scores[i])
+    }, character(1))
+    poly <- sprintf('<polygon points="%s" fill="#5E8C57" fill-opacity="0.27" stroke="#2F5D3A" stroke-width="3"/>',
+                    pts(xy(radius * scores / 100)))
+    svg_chart <- paste0(
+      '<svg viewBox="0 0 620 540" role="img" aria-label="Natural capital domain scores radar chart" ',
+      'style="width:100%;max-width:760px;height:auto;display:block;margin:auto" xmlns="http://www.w3.org/2000/svg">',
+      '<text x="310" y="28" text-anchor="middle" font-size="19" font-weight="bold" fill="#26352B">Natural Capital Domain Scores</text>',
+      paste(rings, collapse = ""), paste(spokes, collapse = ""), poly,
+      paste(values, collapse = ""), paste(labels, collapse = ""), '</svg>'
     )
-    html_results_table(display, "Seven domain summaries calculated from the individual metrics.")
+    div(style = "overflow-x:auto;", HTML(svg_chart))
   })
-  
-  output$plot <- renderPlotly({
-    req(assessment())
-    d <- assessment()$domains
-    theta_closed <- c(d$Domain, d$Domain[1])
-    r_closed <- c(d$Score, d$Score[1])
-    plot_ly(type = "scatterpolar", mode = "lines+markers", r = r_closed, theta = theta_closed, fill = "toself",
-            line = list(width = 3), marker = list(size = 8),
-            text = paste0(theta_closed, "<br>Score: ", r_closed, "/100"), hoverinfo = "text") %>%
-      layout(title = list(text = "Natural Capital Domain Scores"),
-             polar = list(radialaxis = list(visible = TRUE, range = c(0, 100), tickvals = c(0, 20, 40, 60, 80, 100)),
-                          angularaxis = list(direction = "clockwise")),
-             showlegend = FALSE, margin = list(l = 60, r = 60, t = 70, b = 60))
-  })
-  
+
   render_cards <- function(df, cls) {
     if (!nrow(df)) return(div(class = cls, p("No metrics currently fall within this category.")))
     tagList(lapply(seq_len(nrow(df)), function(i) {
       div(class = cls,
           h4(gsub("_", " ", df$Metric[i])),
           p(strong("Score: "), paste0(df$Score[i], "/100 - ", df$Interpretation[i])),
+          p(strong("Why it matters: "), df$Why_it_matters[i]),
+          p(strong("Context: "), df$Context[i]),
           p(strong("Action: "), df$Action[i]),
           p(strong("Mechanism: "), df$Mechanism[i]),
-          p(strong("Priority: "), df$Priority[i]),
+          p(strong("Expected outcome: "), df$Expected_outcome[i]),
+          p(strong("Suggested management attention: "), df$Priority[i]),
           p(strong("Timeframe: "), df$Timeframe[i]),
+          p(strong("Monitoring: "), df$Monitoring[i]),
           p(strong("Reference: "), tags$a(href = as.character(df$ReferenceURL[i]), target = "_blank", rel = "noopener noreferrer", df$Reference[i])))
     }))
   }
   
+  output$score_explanations <- renderUI({
+    req(assessment())
+    r <- assessment()$rec
+    panels <- lapply(seq_len(nrow(r)), function(i) {
+      bslib::accordion_panel(
+        paste0(gsub("_", " ", r$Metric[i]), " — ", r$Score[i], "/100 (", r$Interpretation[i], ")"),
+        h4("Why it matters"), p(r$Why_it_matters[i]),
+        h4("Context and interpretation"), p(r$Context[i]),
+        h4("What can influence the score?"), p(r$Action[i]),
+        h4("Mechanism"), p(r$Mechanism[i]),
+        h4("Expected outcome"), p(r$Expected_outcome[i]),
+        h4("Monitoring"), p(r$Monitoring[i])
+      )
+    })
+    do.call(bslib::accordion, c(list(id = "score_explanation_accordion", multiple = FALSE), panels))
+  })
+  
   output$works <- renderUI({ req(assessment()); render_cards(assessment()$rec[assessment()$rec$Score >= 60, , drop = FALSE], "good") })
   output$needs <- renderUI({ req(assessment()); render_cards(assessment()$rec[assessment()$rec$Score < 60, , drop = FALSE], "need") })
-  output$improvement <- DT::renderDT({
-    req(assessment())
-    d <- assessment()$rec
-    d$Metric <- gsub("_", " ", d$Metric)
-    DT::datatable(d, rownames = FALSE,
-                  options = list(pageLength = 10, scrollX = TRUE, order = list()))
-  }, server = FALSE)
-  
-  output$method_metrics <- DT::renderDT({
-    DT::datatable(metric_defs, rownames = FALSE,
-                  options = list(pageLength = 10, scrollX = TRUE, order = list()))
-  }, server = FALSE)
-  
+  output$improvement <- renderDT({ req(assessment()); datatable(assessment()$rec, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) })
+  output$calculation_methods <- renderDT({ datatable(calculation_methods, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) })
+  output$score_methods <- renderDT({ datatable(score_methods, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) })
+  output$formula_table <- renderDT({ datatable(formulas, rownames = FALSE, options = list(scrollX = TRUE)) })
+  output$method_metrics <- renderDT({ datatable(metric_defs, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) })
+  output$metric_guidance_table <- renderDT({ datatable(metric_guidance, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE)) })
   output$reference_links <- renderUI({ tags$ol(lapply(seq_len(nrow(refs)), function(i) {
     tags$li(tags$a(href = refs$URL[i], target = "_blank", rel = "noopener noreferrer", refs$Title[i])) })) })
   
-  observeEvent(input$xlsx_browser, {
-    
-    if (is.null(input$run) || input$run == 0) {
-      showNotification(
-        "Please click Run assessment before downloading Excel.",
-        type = "warning",
-        duration = 8
+  # Removed unused Excel download handler: there is no Excel download button
+  # in the interface. This avoids bundling the writexl package into ShinyLive.
+
+  output$pdf <- downloadHandler(
+    filename = function() {
+      paste0(
+        gsub("[^A-Za-z0-9_]+", "_", safe(input$farm_name)),
+        "_Green_Sheep_Natural_Capital_Assessment_",
+        Sys.Date(), ".pdf"
       )
-      return(invisible(NULL))
-    }
-    
-    xlsx_file <- tempfile(fileext = ".xlsx")
-    on.exit(unlink(xlsx_file), add = TRUE)
-    
-    notification <- showNotification(
-      "Preparing Excel workbook...",
-      duration = NULL
-    )
-    on.exit(removeNotification(notification), add = TRUE)
-    
-    tryCatch({
-      
+    },
+    content = function(file) {
+      req(assessment())
       a <- assessment()
       
-      if (is.null(a) || !is.data.frame(a$metrics)) {
-        stop("No assessment results are available.")
+      # ------------------------------------------------------------
+      # Professional producer report
+      # ------------------------------------------------------------
+      # The PDF deliberately excludes the technical formula/calculation
+      # tables. Those remain available in the Excel workbook and the
+      # Methods & references tab. The PDF focuses on decisions:
+      # profile -> inputs -> results -> interpretation -> action -> monitoring.
+      #
+      # Base text is 12 pt (cex = 1 at pointsize = 12). Headings are larger.
+      # Landscape A4 is used so integrated tables can remain readable.
+      grDevices::pdf(
+        file = file,
+        width = 11.69,
+        height = 8.27,
+        paper = "a4r",
+        onefile = TRUE,
+        family = "Times",
+        pointsize = 12,
+        useDingbats = FALSE
+      )
+      on.exit(grDevices::dev.off(), add = TRUE)
+      
+      page_no <- 0L
+      overall_score <- round(safe_mean(a$domains$Score), 1)
+      overall_band <- band(overall_score)
+      
+      # ----------------------------
+      # Page and typography helpers
+      # ----------------------------
+      new_page <- function() {
+        plot.new()
+        par(
+          mar = c(0.25, 0.25, 0.25, 0.25),
+          xaxs = "i", yaxs = "i"
+        )
+        page_no <<- page_no + 1L
       }
       
-      input_values <- vapply(
-        a$x,
-        function(value) {
-          if (is.null(value) || !length(value)) {
-            return("")
+      footer <- function() {
+        text(
+          0.5, 0.018,
+          paste0(
+            "| Natural Capital Assessment | ",
+            " Sustainable Sheep Farming Systems| Page ",
+            page_no
+          ),
+          adj = c(0.5, 0),
+          cex = 0.72,
+          col = "#555555"
+        )
+      }
+      
+      header <- function(title, subtitle = NULL) {
+        rect(0, 0.915, 1, 1, col = brand$dark, border = NA)
+        text(
+          0.045, 0.957, title,
+          adj = c(0, 0.5),
+          col = "white",
+          cex = 1.45,
+          font = 2
+        )
+        if (!is.null(subtitle)) {
+          text(
+            0.955, 0.957, subtitle,
+            adj = c(1, 0.5),
+            col = "white",
+            cex = 0.90
+          )
+        }
+        footer()
+      }
+      
+      wrap_lines <- function(x, width_chars = 92) {
+        x <- as.character(x)
+        x[is.na(x)] <- ""
+        x <- gsub("[\r\n]+", " ", x)
+        if (!nzchar(trimws(x))) return("")
+        strwrap(x, width = width_chars, simplify = TRUE)
+      }
+      
+      text_block <- function(
+    x, y, width_chars = 92, cex = 1,
+    line_height = 0.040, colour = brand$text,
+    x_pos = 0.055, min_y = 0.075
+      ) {
+        lines2 <- wrap_lines(x, width_chars)
+        if (!length(lines2)) return(y)
+        for (ln in lines2) {
+          if (y < min_y) {
+            new_page()
+            header("Green Sheep Project")
+            y <- 0.875
+          }
+          text(
+            x_pos, y, ln,
+            adj = c(0, 1),
+            cex = cex,
+            col = colour
+          )
+          y <- y - line_height
+        }
+        y
+      }
+      
+      section_heading <- function(title, y, colour = brand$dark) {
+        if (y < 0.14) {
+          new_page()
+          header("Green Sheep Project")
+          y <- 0.875
+        }
+        text(
+          0.055, y, title,
+          adj = c(0, 1),
+          cex = 1.30,
+          font = 2,
+          col = colour
+        )
+        y - 0.060
+      }
+      
+      # Draw a compact two-column key-value block.
+      key_value <- function(label, value, x, y, width = 0.42) {
+        rect(
+          x, y - 0.048, x + width, y + 0.008,
+          col = "#F4F8F2", border = "#D7E4D8"
+        )
+        text(
+          x + 0.012, y - 0.020, label,
+          adj = c(0, 0.5),
+          cex = 0.86,
+          font = 2,
+          col = brand$dark
+        )
+        text(
+          x + 0.16, y - 0.020, as.character(value),
+          adj = c(0, 0.5),
+          cex = 0.86,
+          col = brand$text
+        )
+      }
+      
+      # Draw a compact table with fixed column widths and wrapped cells.
+      # This is intentionally not a tiny spreadsheet-like table: every
+      # cell remains at >= 12 pt and is wrapped across multiple lines.
+      draw_table <- function(
+    dat, y, widths, title = NULL,
+    header_fill = brand$dark,
+    row_fill = "#FFFFFF",
+    line_height = 0.034,
+    header_height = 0.055,
+    font_size = 1.0,
+    header_size = 1.0,
+    left = 0.045,
+    right = 0.955,
+    row_gap = 0.008,
+    min_y = 0.080
+      ) {
+        dat <- as.data.frame(dat, stringsAsFactors = FALSE)
+        dat[] <- lapply(dat, function(z) {
+          z <- as.character(z)
+          z[is.na(z)] <- ""
+          gsub("[\r\n]+", " ", z)
+        })
+        
+        if (!is.null(title)) {
+          y <- section_heading(title, y)
+        }
+        
+        if (!nrow(dat)) {
+          return(text_block("No records available.", y, cex = font_size))
+        }
+        
+        if (length(widths) != ncol(dat)) {
+          widths <- rep(1 / ncol(dat), ncol(dat))
+        }
+        widths <- widths / sum(widths)
+        usable_width <- right - left
+        x_left <- left + c(0, cumsum(widths[-length(widths)])) * usable_width
+        col_width <- widths * usable_width
+        
+        draw_header_row <- function(y0) {
+          rect(
+            left, y0 - header_height,
+            right, y0,
+            col = header_fill, border = header_fill
+          )
+          for (j in seq_len(ncol(dat))) {
+            text(
+              x_left[j] + 0.008, y0 - header_height / 2,
+              names(dat)[j],
+              adj = c(0, 0.5),
+              cex = max(1, header_size),
+              font = 2,
+              col = "white"
+            )
+          }
+          y0 - header_height
+        }
+        
+        y <- draw_header_row(y)
+        
+        for (i in seq_len(nrow(dat))) {
+          cell_lines <- lapply(seq_len(ncol(dat)), function(j) {
+            # Width is converted to approximate Times characters.
+            chars <- max(16, floor(col_width[j] * 135))
+            wrap_lines(dat[i, j], chars)
+          })
+          n_lines <- max(1L, vapply(cell_lines, length, integer(1)))
+          row_height <- max(
+            0.065,
+            0.018 + max(n_lines) * line_height
+          )
+          
+          if ((y - row_height) < min_y) {
+            footer()
+            new_page()
+            header(if (!is.null(title)) title else "Green Sheep Project")
+            y <- 0.875
+            y <- draw_header_row(y)
           }
           
-          paste(as.character(value), collapse = "; ")
-        },
-        character(1)
-      )
-      
-      workbook <- list(
-        Inputs = data.frame(
-          Variable = names(input_values),
-          Value = unname(input_values),
-          stringsAsFactors = FALSE
-        ),
-        Metrics = a$metrics,
-        Domains = a$domains,
-        Recommendations = a$rec,
-        Metric_definitions = metric_defs,
-        Calculation_methods = calculation_methods,
-        Score_methods = score_methods,
-        Formulas = formulas,
-        References = refs
-      )
-      
-      writexl::write_xlsx(
-        x = workbook,
-        path = xlsx_file
-      )
-      
-      if (
-        !file.exists(xlsx_file) ||
-        !is.finite(file.info(xlsx_file)$size) ||
-        file.info(xlsx_file)$size < 4
-      ) {
-        stop("The workbook generator did not create a file.")
+          rect(
+            left, y - row_height,
+            right, y,
+            col = if (i %% 2L == 0L) "#F7FAF6" else row_fill,
+            border = "#D7E4D8"
+          )
+          
+          for (j in seq_len(ncol(dat))) {
+            lines_j <- cell_lines[[j]]
+            if (!length(lines_j)) lines_j <- ""
+            yy <- y - 0.024
+            for (ln in lines_j) {
+              text(
+                x_left[j] + 0.008, yy, ln,
+                adj = c(0, 1),
+                cex = max(1, font_size),
+                col = brand$text
+              )
+              yy <- yy - line_height
+            }
+          }
+          y <- y - row_height - row_gap
+        }
+        
+        y - 0.015
       }
       
-      # XLSX is a ZIP-based format. Check its initial ZIP signature.
-      signature <- local({
-        con <- file(xlsx_file, open = "rb")
-        on.exit(close(con))
-        readBin(con, what = "raw", n = 4L)
-      })
-      
-      if (!identical(
-        signature,
-        as.raw(c(0x50, 0x4B, 0x03, 0x04))
-      )) {
-        stop("The generated file does not have the expected XLSX ZIP signature.")
+      # ----------------------------
+      # Metric input / result labels
+      # ----------------------------
+      input_label <- function(key, x) {
+        switch(
+          key,
+          Ecological_Condition =
+            paste0("Scoring guide slider: ", formatC(x$ecological, format = "f", digits = 2), " / 1"),
+          Woody_Vegetation_Cover =
+            paste0("Scoring guide slider: ", formatC(x$woody, format = "f", digits = 0), "%"),
+          Aggregation =
+            paste0("Scoring guide slider: ", formatC(x$aggregation, format = "f", digits = 2), " / 1"),
+          Proximity =
+            paste0("Scoring guide slider: ", formatC(x$distance, format = "f", digits = 0), " m mean distance"),
+          Soil_Condition =
+            paste0(
+              "Scoring guide sliders: median cover ",
+              x$soil_median, "%; minimum cover ",
+              x$soil_minimum, "%; stability ",
+              x$soil_stability, "%"
+            ),
+          Riparian_Buffer_Condition =
+            paste0("Scoring guide slider: ", x$riparian, "%"),
+          Forage_Condition =
+            paste0("Scoring guide slider: ", formatC(x$forage, format = "f", digits = 2), " / 1"),
+          Habitat_Features =
+            paste0("Scoring guide slider: ", x$habitat, " / 5"),
+          Landscape_Connectivity =
+            paste0("Scoring guide slider: ", x$connectivity, " / 5"),
+          Salt_Affected_Land =
+            paste0("Scoring guide slider: ", x$salt, " / 5"),
+          Native_Vegetation_Extent =
+            paste0("Farm input: ", x$native, "% native vegetation"),
+          Shade_and_Shelter =
+            paste0("Farm input: ", x$shade, " / 5"),
+          Waterpoint_Condition =
+            paste0("Farm input: ", x$water, " / 5"),
+          GHG_Climate_Plan =
+            paste0("Farm input: ", x$ghg, " / 5"),
+          Drought_Preparedness =
+            paste0("Farm input: ", x$drought, " / 5"),
+          Nutrient_Efficiency =
+            paste0("Farm input: ", x$nutrient, " / 5"),
+          Feed_Efficiency =
+            paste0("Farm input: ", x$feed, " / 5"),
+          Animal_Welfare =
+            paste0("Farm input: ", x$welfare, " / 5"),
+          Pasture_Planning =
+            paste0("Farm input: ", x$pasture, " / 5"),
+          Animal_Health =
+            paste0("Farm input: ", x$health, " / 5"),
+          Biosecurity =
+            paste0("Farm input: ", x$biosecurity, " / 5"),
+          Lambing_Management =
+            paste0("Farm input: ", x$lambing, " / 5"),
+          People_and_Safety =
+            paste0("Farm input: ", x$people, " / 5"),
+          Business_Resilience =
+            paste0("Farm input: ", x$business, " / 5"),
+          Community_Engagement =
+            paste0("Farm input: ", x$community, " / 5"),
+          Stocking_Fit =
+            paste0(
+              "Calculated from stocking pressure ",
+              x$stocking, " DSE/ha versus sustainable capacity ",
+              x$capacity, " DSE/ha"
+            ),
+          ""
+        )
       }
       
-      filename <- paste0(
-        gsub(
-          "[^A-Za-z0-9_]+",
-          "_",
-          safe(a$x$farm_name)
-        ),
-        "_assessment_",
-        Sys.Date(),
-        ".xlsx"
+      # ------------------------------------------------------------
+      # Cover
+      # ------------------------------------------------------------
+      new_page()
+      rect(0, 0, 1, 1, col = brand$cream, border = NA)
+      rect(0, 0.73, 1, 1, col = brand$dark, border = NA)
+      
+      logo_path <- file.path("www", "SheepMerin.png")
+      if (!file.exists(logo_path)) {
+        logo_path <- file.path("www", "Merino.png")
+      }
+      if (!is.null(logo_path) && nzchar(logo_path) && file.exists(logo_path)) {
+        img <- tryCatch(png::readPNG(logo_path), error = function(e) NULL)
+        if (!is.null(img)) {
+          rasterImage(img, 0.67, 0.10, 0.94, 0.61, interpolate = TRUE)
+        }
+      }
+      
+      text(
+        0.055, 0.905,
+        "Sustainable Sheep Farming System",
+        adj = c(0, 0.5),
+        cex = 1.05,
+        font = 2,
+        col = "#DCEBDD"
+      )
+      text(
+        0.055, 0.835,
+        "Natural Capital & Sustainable Sheep Farming",
+        adj = c(0, 0.5),
+        cex = 1.85,
+        font = 2,
+        col = "white"
+      )
+      text(
+        0.055, 0.785,
+        "Producer Farm Assessment Report",
+        adj = c(0, 0.5),
+        cex = 1.20,
+        col = "white"
       )
       
-      session$sendCustomMessage(
-        "natcap_download",
-        list(
-          filename = filename,
-          mime = paste0(
-            "application/",
-            "vnd.openxmlformats-officedocument.",
-            "spreadsheetml.sheet"
-          ),
-          data = base64enc::base64encode(xlsx_file)
+      text(
+        0.055, 0.635,
+        safe(a$x$farm_name),
+        adj = c(0, 0.5),
+        cex = 1.65,
+        font = 2,
+        col = brand$dark
+      )
+      text(
+        0.055, 0.585,
+        paste(
+          a$x$system,
+          "|", a$x$area, "ha",
+          "|", format(a$time, "%d %B %Y")
+        ),
+        adj = c(0, 0.5),
+        cex = 1.00,
+        col = brand$text
+      )
+      
+      rect(0.055, 0.36, 0.58, 0.51, col = "white", border = "#D7E4D8")
+      text(0.075, 0.475, "OVERALL ASSESSMENT", adj = c(0, 0.5),
+           cex = 1.0, font = 2, col = brand$dark)
+      text(0.075, 0.415, paste0(overall_score, " / 100"),
+           adj = c(0, 0.5), cex = 1.65, font = 2, col = brand$green)
+      text(0.075, 0.375, overall_band,
+           adj = c(0, 0.5), cex = 1.0, font = 2, col = brand$text)
+      
+      text(
+        0.055, 0.075,
+        paste0(
+          contact$role, " | ", contact$name,
+          " | ", contact$email, " | ", contact$mobile
+        ),
+        adj = c(0, 0.5),
+        cex = 0.78,
+        col = "#555555"
+      )
+      footer()
+      
+      # ------------------------------------------------------------
+      # Executive summary and farm profile
+      # ------------------------------------------------------------
+      new_page()
+      header("Executive summary", format(a$time, "%d %B %Y"))
+      
+      y <- 0.875
+      y <- text_block(
+        paste(
+          "This report summarises a farm-scale screening assessment across",
+          length(metric_keys), "natural-capital, land-condition and sustainable",
+          "sheep-farming metrics. The assessment combines producer-entered",
+          "scoring-guide values with farm and management inputs. Scores are",
+          "standardised to a 0-100 scale so results can be compared across",
+          "metrics and aggregated into seven assessment domains."
+        ),
+        y, width_chars = 108, cex = 1.0, line_height = 0.041
+      )
+      
+      y <- y - 0.025
+      y <- section_heading("Farm profile", y)
+      
+      key_value("Farm name", safe(a$x$farm_name), 0.055, y, 0.43)
+      key_value("System", a$x$system, 0.515, y, 0.43)
+      y <- y - 0.070
+      key_value("Farm area", paste0(a$x$area, " ha"), 0.055, y, 0.43)
+      key_value("Assessment date", format(a$time, "%d %B %Y"), 0.515, y, 0.43)
+      y <- y - 0.070
+      key_value("Stocking pressure", paste0(a$x$stocking, " DSE/ha"), 0.055, y, 0.43)
+      key_value("Sustainable capacity", paste0(a$x$capacity, " DSE/ha"), 0.515, y, 0.43)
+      
+      y <- y - 0.085
+      y <- section_heading("Domain results", y)
+      
+      domain_table <- data.frame(
+        Domain = a$domains$Domain,
+        Score = paste0(a$domains$Score, "/100"),
+        Interpretation = a$domains$Interpretation,
+        stringsAsFactors = FALSE
+      )
+      y <- draw_table(
+        domain_table, y,
+        widths = c(0.62, 0.16, 0.22),
+        font_size = 1.0,
+        header_size = 1.0
+      )
+      
+      # ------------------------------------------------------------
+      # Input record: only values that are not duplicated by sliders
+      # ------------------------------------------------------------
+      new_page()
+      header("Assessment input record")
+      
+      y <- 0.875
+      y <- text_block(
+        "The report separates the input record into two groups. Scoring-guide metrics are recorded from the image-backed sliders. Farm and management inputs are listed separately below. This avoids duplicating the same metric in two parts of the report.",
+        y, width_chars = 108
+      )
+      
+      y <- y - 0.025
+      y <- section_heading("Farm and management inputs", y)
+      
+      management_keys <- setdiff(
+        ids,
+        c(
+          "ecological", "woody", "aggregation", "distance",
+          "soil_median", "soil_minimum", "soil_stability",
+          "riparian", "forage", "habitat", "connectivity", "salt"
         )
       )
       
-    }, error = function(e) {
+      management_labels <- labels[match(management_keys, ids)]
+      management_values <- vapply(
+        management_keys,
+        function(k) as.character(a$x[[k]]),
+        character(1)
+      )
       
-      showNotification(
-        paste(
-          "Excel export failed:",
-          conditionMessage(e)
+      management_table <- data.frame(
+        Input = management_labels,
+        Value = management_values,
+        stringsAsFactors = FALSE
+      )
+      
+      y <- draw_table(
+        management_table, y,
+        widths = c(0.72, 0.28),
+        font_size = 1.0,
+        header_size = 1.0
+      )
+      
+      if (y < 0.25) {
+        new_page()
+        header("Assessment input record")
+        y <- 0.875
+      }
+      
+      y <- section_heading("Scoring-guide metric inputs", y)
+      
+      scoring_table <- data.frame(
+        Metric = metric_labels[match(
+          c(
+            "ecological", "woody", "aggregation", "distance",
+            "soil_median", "soil_minimum", "soil_stability",
+            "riparian", "forage", "habitat", "connectivity", "salt"
+          ), ids
+        )],
+        Entered_value = c(
+          paste0(a$x$ecological, " / 1"),
+          paste0(a$x$woody, " %"),
+          paste0(a$x$aggregation, " / 1"),
+          paste0(a$x$distance, " m"),
+          paste0(a$x$soil_median, " %"),
+          paste0(a$x$soil_minimum, " %"),
+          paste0(a$x$soil_stability, " %"),
+          paste0(a$x$riparian, " %"),
+          paste0(a$x$forage, " / 1"),
+          paste0(a$x$habitat, " / 5"),
+          paste0(a$x$connectivity, " / 5"),
+          paste0(a$x$salt, " / 5")
         ),
-        type = "error",
-        duration = NULL
+        stringsAsFactors = FALSE
       )
       
-    })
-    
-  }, ignoreInit = TRUE)
-  
-  generate_pdf <- function(file) {
-    # Always remove any open PDF device when the download function exits.
-    initial_devices <- grDevices::dev.list()
-    close_report_devices <- function() {
-      for (device in setdiff(grDevices::dev.list(), initial_devices))
-        try(grDevices::dev.off(device), silent = TRUE)
-    }
-    on.exit(close_report_devices(), add = TRUE)
-    
-    # Build the assessment even if the user has not clicked "Run assessment".
-    a <- tryCatch({
-      if (is.null(input$run) || input$run == 0) {
-        x <- current()
-        m <- calc_metrics(x)
-        list(metrics = m, domains = calc_domains(m), rec = rec_engine(m),
-             x = x, time = Sys.time())
-      } else {
-        assessment()
-      }
-    }, error = function(e) NULL)
-    
-    band_colour <- function(score) {
-      if (!is.finite(score)) return("#9E9E9E")
-      if (score < 20) return("#A33A45")
-      if (score < 40) return("#C96A4A")
-      if (score < 60) return("#C49A3A")
-      if (score < 80) return("#6E9B60")
-      return("#2F5D3A")
-    }
-    
-    clean_metric <- function(x) gsub("_", " ", x)
-    
-    new_page <- function(header_title = NULL, header_sub = NULL) {
-      plot.new()
-      par(mar = c(0.35, 0.35, 0.35, 0.35), xaxs = "i", yaxs = "i", usr = c(0, 1, 0, 1))
-      if (!is.null(header_title)) {
-        rect(0, 0.925, 1, 1, col = brand$dark, border = NA)
-        text(0.055, 0.962, header_title, adj = c(0, 0.5), col = "white", cex = 1.12, font = 2)
-        if (!is.null(header_sub)) text(0.945, 0.962, header_sub, adj = c(1, 0.5), col = "white", cex = 0.68)
-      }
-      rect(0, 0, 1, 0.028, col = brand$cream, border = NA)
-      text(0.055, 0.014, "Green Sheep Project | Natural Capital Assessment", adj = c(0, 0.5), cex = 0.48, col = "#555555")
-      text(0.945, 0.014, format(Sys.Date(), "%d %B %Y"), adj = c(1, 0.5), cex = 0.48, col = "#555555")
-    }
-    
-    wrapped_lines <- function(x, width) strwrap(as.character(x), width = width, simplify = TRUE)
-    
-    write_paragraph <- function(x, y, width = 108, cex = 0.72, leading = 0.026, colour = brand$text, font = 1) {
-      lines <- wrapped_lines(x, width)
-      for (line in lines) {
-        if (y < 0.09) { new_page(); y <- 0.88 }
-        text(0.065, y, line, adj = c(0, 1), cex = cex, col = colour, font = font)
-        y <- y - leading
-      }
-      y - 0.012
-    }
-    
-    write_heading <- function(x, y, cex = 0.98, colour = brand$dark) {
-      if (y < 0.13) { new_page(); y <- 0.88 }
-      text(0.065, y, x, adj = c(0, 1), cex = cex, font = 2, col = colour)
-      lines(x = c(0.065, 0.935), y = c(y - 0.018, y - 0.018), col = brand$green, lwd = 1.4)
-      y - 0.042
-    }
-    
-    draw_table <- function(dat, y, widths = NULL, title = NULL, caption = NULL,
-                           cex = 0.52, min_row_height = 0.026, max_start_y = 0.86) {
-      if (!is.null(title)) y <- write_heading(title, y)
+      y <- draw_table(
+        scoring_table, y,
+        widths = c(0.72, 0.28),
+        font_size = 1.0,
+        header_size = 1.0
+      )
       
-      dat <- as.data.frame(dat, stringsAsFactors = FALSE)
-      dat[] <- lapply(dat, function(z) gsub("[\r\n]+", " ", as.character(z)))
-      
-      n <- ncol(dat)
-      if (is.null(widths)) widths <- rep(1 / n, n)
-      widths <- widths / sum(widths)
-      
-      char_widths <- pmax(8, round(widths * 150))
-      cell_lines <- lapply(seq_len(n), function(j) {
-        lapply(dat[[j]], function(z) wrapped_lines(z, char_widths[j]))
-      })
-      
-      row_lines <- sapply(seq_len(nrow(dat)), function(i) {
-        max(vapply(seq_len(n), function(j) length(cell_lines[[j]][[i]]), integer(1)))
-      })
-      row_heights <- pmax(min_row_height, row_lines * 0.021 + 0.012)
-      
-      draw_header_row <- function(y) {
-        rect(0.065, y - 0.032, 0.935, y, col = brand$dark, border = NA)
-        x <- 0.065
-        for (j in seq_len(n)) {
-          text(x + 0.006, y - 0.016, names(dat)[j], adj = c(0, 0.5), cex = cex, font = 2, col = "white")
-          x <- x + widths[j] * 0.87
-        }
-        y - 0.032
-      }
-      
-      if (y > max_start_y) y <- max_start_y
-      y <- draw_header_row(y)
-      
-      for (i in seq_len(nrow(dat))) {
-        if (y - row_heights[i] < 0.09) {
-          new_page()
-          y <- draw_header_row(0.86)
-        }
-        
-        fill <- if (i %% 2 == 0) "#F2F6F0" else "#FFFFFF"
-        rect(0.065, y - row_heights[i], 0.935, y, col = fill, border = "#D7E4D8")
-        
-        x <- 0.065
-        for (j in seq_len(n)) {
-          lines <- cell_lines[[j]][[i]]
-          yy <- y - 0.014
-          for (line in lines) {
-            text(x + 0.006, yy, line, adj = c(0, 1), cex = cex, col = brand$text)
-            yy <- yy - 0.021
-          }
-          x <- x + widths[j] * 0.87
-        }
-        y <- y - row_heights[i]
-      }
-      
-      if (!is.null(caption)) {
-        y <- y - 0.014
-        y <- write_paragraph(caption, y, width = 115, cex = 0.55, leading = 0.020, colour = "#555555")
-      }
-      y - 0.020
-    }
-    
-    score_figure <- function(dat, label_col, score_col, title) {
-      d <- dat[order(dat[[score_col]]), , drop = FALSE]
-      labels <- clean_metric(d[[label_col]])
-      scores <- as.numeric(d[[score_col]])
-      cols <- vapply(scores, band_colour, character(1))
-      
-      n <- length(scores)
-      needed <- 0.055 * n + 0.20
-      pages <- max(1, ceiling(needed / 0.72))
-      per_page <- ceiling(n / pages)
-      
-      for (p in seq_len(pages)) {
-        idx <- ((p - 1) * per_page + 1):min(n, p * per_page)
-        new_page(title, if (pages > 1) paste("Page", p, "of", pages) else NULL)
-        par(fig = c(0.05, 0.95, 0.08, 0.86), new = TRUE)
-        op <- par(mar = c(4.2, 11.5, 2.5, 2.2))
-        barplot(scores[idx], names.arg = labels[idx], horiz = TRUE, las = 1,
-                col = cols[idx], border = NA, xlim = c(0, 100),
-                xlab = "Score (0-100)", cex.names = 0.62, cex.axis = 0.68, cex.lab = 0.75)
-        abline(v = c(20, 40, 60, 80), col = "#B9C8BB", lty = 2, lwd = 0.8)
-        par(op)
-        text(0.5, 0.055, "Score bands: Very low <20 | Low 20-<40 | Moderate 40-<60 | High 60-<80 | Very high >=80",
-             adj = c(0.5, 0.5), cex = 0.52, col = "#555555")
-      }
-    }
-    
-    report_ok <- tryCatch({
-      grDevices::pdf(file = file, width = 8.27, height = 11.69,
-                     paper = "a4", onefile = TRUE, family = "Helvetica",
-                     useDingbats = FALSE)
-      
-      # ---------- Cover ----------
+      # ------------------------------------------------------------
+      # Overall and domain interpretation
+      # ------------------------------------------------------------
       new_page()
-      rect(0, 0.72, 1, 1, col = brand$dark, border = NA)
-      rect(0, 0.70, 1, 0.72, col = brand$green, border = NA)
-      text(0.5, 0.905, "SUSTAINABLE SHEEP FARMING SYSTEMS", adj = c(0.5, 0.5), cex = 1.55, font = 2, col = "white")
-      text(0.5, 0.845, "Farm-Scale Natural Capital Assessment Report", adj = c(0.5, 0.5), cex = 1.05, col = "white")
-      text(0.5, 0.805, "", adj = c(0.5, 0.5), cex = 0.70, col = "#EAF2E7")
+      header("Assessment overview")
       
-      text(0.5, 0.60, safe(a$x$farm_name), adj = c(0.5, 0.5), cex = 1.65, font = 2, col = brand$dark)
-      text(0.5, 0.545, paste(a$x$system, "|", a$x$area, "hectares"), adj = c(0.5, 0.5), cex = 0.85, col = brand$text)
-      text(0.5, 0.505, format(a$time, "%d %B %Y"), adj = c(0.5, 0.5), cex = 0.75, col = "#555555")
+      y <- 0.875
+      rect(0.055, 0.76, 0.32, 0.86, col = "#F4F8F2", border = "#D7E4D8")
+      text(0.075, 0.82, "OVERALL SCORE", adj = c(0, 0.5),
+           cex = 1.0, font = 2, col = brand$dark)
+      text(0.075, 0.785, paste0(overall_score, " / 100"),
+           adj = c(0, 0.5), cex = 1.45, font = 2, col = brand$green)
       
-      overall_score <- round(safe_mean(a$domains$Score), 1)
-      rect(0.30, 0.375, 0.70, 0.455, col = band_colour(overall_score), border = NA)
-      text(0.5, 0.432, "Overall natural capital score", adj = c(0.5, 0.5), cex = 0.72, col = "white")
-      text(0.5, 0.398, paste0(overall_score, "/100 | ", band(overall_score)), adj = c(0.5, 0.5), cex = 1.05, font = 2, col = "white")
+      rect(0.395, 0.76, 0.945, 0.86, col = "#F4F8F2", border = "#D7E4D8")
+      text(0.415, 0.82, "INTERPRETATION", adj = c(0, 0.5),
+           cex = 1.0, font = 2, col = brand$dark)
+      text(0.415, 0.785, overall_band,
+           adj = c(0, 0.5), cex = 1.20, font = 2, col = brand$text)
       
-      text(0.5, 0.205, "Prepared by Dr Aram Ali", adj = c(0.5, 0.5), cex = 0.78, font = 2, col = brand$dark)
-      text(0.5, 0.172, "Green Sheep Project Manager | Wheatbelt Natural Resource Management Inc.", adj = c(0.5, 0.5), cex = 0.62, col = brand$text)
-      text(0.5, 0.142, "aali@wheatbeltnrm.org.au | 0470 488 185", adj = c(0.5, 0.5), cex = 0.62, col = brand$text)
-      text(0.5, 0.055, "(c) Copyright: All rights reserved. Free use for personal, non-commercial farm assessment.", adj = c(0.5, 0.5), cex = 0.50, col = "#555555")
-      
-      # ---------- Abstract ----------
-      new_page("Abstract", "Natural Capital Assessment")
-      y <- 0.86
-      
-      strengths <- a$rec[a$rec$Score >= 60, , drop = FALSE]
-      priorities <- a$rec[a$rec$Score < 60, , drop = FALSE]
-      strengths <- strengths[order(-strengths$Score), , drop = FALSE]
-      priorities <- priorities[order(priorities$Score), , drop = FALSE]
-      
-      strongest <- if (nrow(strengths)) paste(clean_metric(strengths$Metric[1:min(3, nrow(strengths))]), collapse = ", ") else "no metrics currently scored at or above 60"
-      priority <- if (nrow(priorities)) paste(clean_metric(priorities$Metric[1:min(3, nrow(priorities))]), collapse = ", ") else "no metrics currently scored below 60"
-      
-      abstract <- paste0(
-        "This report presents a farm-scale natural capital assessment for ", safe(a$x$farm_name),
-        ", a ", a$x$system, " enterprise operating over ", a$x$area,
-        " hectares. The assessment integrates indicators of ecological condition, native vegetation, soil and forage condition, water and riparian systems, climate readiness, sheep welfare and grazing management, and people and business resilience. ",
-        "The overall natural capital score was ", overall_score, " out of 100 (", band(overall_score),
-        "). The strongest areas were ", strongest, ". The highest-priority areas for improvement were ", priority,
-        ". Results are intended to support practical farm planning, stakeholder communication and ongoing monitoring. They are screening-level indicators and should be interpreted alongside local knowledge, seasonal conditions, paddock history and professional advice where required."
+      y <- 0.715
+      y <- section_heading("Domain scores", y)
+      y <- draw_table(
+        domain_table, y,
+        widths = c(0.62, 0.16, 0.22),
+        font_size = 1.0
       )
       
-      y <- write_paragraph(abstract, y, cex = 0.76, leading = 0.028)
-      y <- y - 0.010
-      y <- write_heading("Key results", y)
-      
-      key_results <- data.frame(
-        Measure = c("Overall natural capital score", "Overall interpretation",
-                    "Strongest performing metrics", "Priority improvement metrics",
-                    "Number of metrics at or above 60", "Number of metrics below 60"),
-        Result = c(paste0(overall_score, "/100"), band(overall_score),
-                   strongest, priority,
-                   as.character(sum(a$metrics$Score >= 60)),
-                   as.character(sum(a$metrics$Score < 60))),
-        stringsAsFactors = FALSE
-      )
-      y <- draw_table(key_results, y, widths = c(0.42, 0.58), cex = 0.58)
-      
-      # ---------- Farm profile ----------
-      new_page("Farm profile", "Assessment context")
-      y <- 0.86
-      farm_profile <- data.frame(
-        Item = c("Farm name", "System type", "Farm area", "Stocking pressure",
-                 "Sustainable capacity", "Assessment date"),
-        Detail = c(safe(a$x$farm_name), a$x$system, paste0(a$x$area, " ha"),
-                   paste0(a$x$stocking, " DSE/ha"), paste0(a$x$capacity, " DSE/ha"),
-                   format(a$time, "%d %B %Y")),
-        stringsAsFactors = FALSE
-      )
-      y <- draw_table(farm_profile, y, widths = c(0.35, 0.65), cex = 0.60)
-      
-      y <- write_heading("Metric input values", y)
-      input_table <- data.frame(
-        Variable = clean_metric(names(a$x)),
-        Value = as.character(unlist(a$x)),
-        stringsAsFactors = FALSE
-      )
-      y <- draw_table(input_table, y, widths = c(0.55, 0.45), cex = 0.52)
-      
-      # ---------- Domain results ----------
-      new_page("Natural capital domain results", "Overall performance")
-      y <- 0.86
-      y <- write_paragraph(
-        "Domain scores summarise the performance of related natural capital metrics. Scores are reported from 0 to 100, with higher scores indicating stronger condition, management or resilience. The figure and table below identify where the farm is performing strongly and where targeted management may deliver the greatest improvement.",
-        y, cex = 0.70, leading = 0.026
+      y <- y - 0.02
+      y <- section_heading("Interpretation", y)
+      y <- text_block(
+        paste(
+          "The overall result is the mean of the seven domain scores.",
+          "Metric scores of 60 or above are presented as areas to maintain",
+          "or strengthen; scores below 60 are presented as areas that may",
+          "benefit from management attention. These categories are screening",
+          "interpretations rather than a certification of farm performance."
+        ),
+        y, width_chars = 108
       )
       
-      score_figure(a$domains, "Domain", "Score", "Figure 1. Natural capital domain scores")
+      # ------------------------------------------------------------
+      # Integrated metric results and management plan
+      # ------------------------------------------------------------
+      # One integrated table means the reader does not have to move between
+      # separate 'results' and 'recommendations' sections to understand a metric.
+      metric_rows <- vector("list", length(metric_keys))
       
-      new_page("Natural capital domain results", "Domain scores")
-      y <- 0.86
-      domain_table <- a$domains
-      names(domain_table)[names(domain_table) == "Score"] <- "Score (/100)"
-      y <- draw_table(domain_table, y, widths = c(0.58, 0.20, 0.22),
-                      title = "Table 1. Domain scores and interpretation", cex = 0.58)
-      
-      # ---------- Metric results ----------
-      new_page("Metric results", "Detailed assessment")
-      y <- 0.86
-      y <- write_paragraph(
-        "Metric scores convert farm-entered indicators to a common 0-100 scale. Scores at or above 60 are interpreted as strengths, while scores below 60 identify opportunities for improvement. The figure and table below present all assessed metrics.",
-        y, cex = 0.70, leading = 0.026
-      )
-      
-      score_figure(a$metrics, "Metric", "Score", "Figure 2. Metric scores")
-      
-      new_page("Metric results", "Metric scores")
-      y <- 0.86
-      metric_table <- a$metrics
-      metric_table$Metric <- clean_metric(metric_table$Metric)
-      names(metric_table)[names(metric_table) == "Score"] <- "Score (/100)"
-      y <- draw_table(metric_table, y, widths = c(0.42, 0.16, 0.18, 0.24),
-                      title = "Table 2. Metric scores and interpretation", cex = 0.52)
-      
-      # ---------- Strengths ----------
-      new_page("What works well", "Strengths")
-      y <- 0.86
-      if (!nrow(strengths)) {
-        y <- write_paragraph("No metrics currently score at or above 60. This suggests substantial opportunities to strengthen natural capital condition and management across the farm.", y, cex = 0.72)
-      } else {
-        for (i in seq_len(nrow(strengths))) {
-          if (y < 0.20) { new_page("What works well", "Strengths"); y <- 0.86 }
-          y <- write_heading(paste0(clean_metric(strengths$Metric[i]), " - ", strengths$Score[i], "/100 (", strengths$Interpretation[i], ")"), y, cex = 0.82, colour = brand$green)
-          y <- write_paragraph(paste("Action:", strengths$Action[i]), y, cex = 0.66)
-          y <- write_paragraph(paste("Why it matters:", strengths$Mechanism[i]), y, cex = 0.66)
-          y <- write_paragraph(paste("Priority:", strengths$Priority[i], "| Timeframe:", strengths$Timeframe[i]), y, cex = 0.62, colour = "#555555")
-          y <- y - 0.008
+      for (i in seq_along(metric_keys)) {
+        key <- metric_keys[i]
+        ri <- match(key, a$rec$Metric)
+        di <- match(key, metric_guidance$Metric)
+        score_i <- a$rec$Score[ri]
+        interpretation_i <- a$rec$Interpretation[ri]
+        
+        result_text <- input_label(key, a$x)
+        
+        if (key == "Soil_Condition") {
+          result_text <- paste0(
+            result_text,
+            "; composite score = ",
+            score_i, "/100"
+          )
+        } else if (key == "Proximity") {
+          result_text <- paste0(
+            result_text,
+            "; proximity score = ",
+            score_i, "/100"
+          )
+        } else if (key == "Stocking_Fit") {
+          result_text <- paste0(
+            result_text,
+            "; stocking-fit score = ",
+            score_i, "/100"
+          )
+        } else {
+          result_text <- paste0(
+            result_text,
+            "; metric score = ",
+            score_i, "/100"
+          )
         }
+        
+        metric_rows[[i]] <- data.frame(
+          Metric = metric_labels[i],
+          Score = paste0(score_i, "/100\n", interpretation_i),
+          "Meaning and context" = paste(
+            metric_defs$Definition[match(metric_labels[i], metric_defs$Metric)],
+            a$rec$Why_it_matters[ri],
+            a$rec$Context[ri],
+            sep = " "
+          ),
+          Result = result_text,
+          "Management plan" = paste(
+            a$rec$Action[ri],
+            paste0("Mechanism: ", a$rec$Mechanism[ri]),
+            paste0("Expected outcome: ", a$rec$Expected_outcome[ri]),
+            paste0(
+              "Suggested management attention: ",
+              a$rec$Priority[ri],
+              " | Timeframe: ",
+              a$rec$Timeframe[ri]
+            ),
+            sep = " "
+          ),
+          "Monitoring and reference" = paste(
+            a$rec$Monitoring[ri],
+            paste0("Reference: ", a$rec$Reference[ri]),
+            sep = " "
+          ),
+          stringsAsFactors = FALSE
+        )
       }
       
-      # ---------- Improvement plan ----------
-      new_page("Improvement plan", "Priority actions")
-      y <- 0.86
-      y <- write_paragraph(
-        "The improvement plan identifies metrics scoring below 60. Actions are ordered from lowest to highest score, helping direct attention to the areas where improvement is likely to provide the greatest benefit.",
-        y, cex = 0.70, leading = 0.026
-      )
+      metric_table <- do.call(rbind, metric_rows)
       
-      if (!nrow(priorities)) {
-        y <- write_paragraph("No metrics currently fall below the improvement threshold of 60.", y, cex = 0.72)
-      } else {
-        for (i in seq_len(nrow(priorities))) {
-          if (y < 0.20) { new_page("Improvement plan", "Priority actions"); y <- 0.86 }
-          y <- write_heading(paste0(clean_metric(priorities$Metric[i]), " - ", priorities$Score[i], "/100 (", priorities$Interpretation[i], ")"), y, cex = 0.82, colour = brand$red)
-          y <- write_paragraph(paste("Recommended action:", priorities$Action[i]), y, cex = 0.66)
-          y <- write_paragraph(paste("Why it matters:", priorities$Mechanism[i]), y, cex = 0.66)
-          y <- write_paragraph(paste("Priority:", priorities$Priority[i], "| Timeframe:", priorities$Timeframe[i]), y, cex = 0.62, colour = "#555555")
-          y <- write_paragraph(paste("Supporting reference:", priorities$Reference[i]), y, cex = 0.58, colour = "#555555")
-          y <- y - 0.008
+      new_page()
+      header("Metric results and integrated management plan", "26 metrics")
+      
+      y <- 0.875
+      y <- text_block(
+        "Each metric below combines the definition, entered/calculated result, standardised score, management action, suggested attention level, timeframe and monitoring indicator. The scoring-guide metrics are sourced from the sliders on the Scoring guides page; they are not repeated as Farm & Management Inputs.",
+        y, width_chars = 108
+      )
+      y <- y - 0.015
+      
+      # Split into manageable blocks while keeping the same integrated table structure.
+      block_size <- 7L
+      for (st in seq(1, nrow(metric_table), by = block_size)) {
+        en <- min(st + block_size - 1L, nrow(metric_table))
+        block <- metric_table[st:en, , drop = FALSE]
+        
+        if (st > 1L) {
+          new_page()
+          header("Metric results and integrated management plan", "continued")
+          y <- 0.875
         }
+        
+        y <- draw_table(
+          block, y,
+          widths = c(0.13, 0.09, 0.24, 0.16, 0.24, 0.14),
+          font_size = 1.0,
+          header_size = 1.0,
+          line_height = 0.033,
+          row_gap = 0.007
+        )
       }
       
-      # ---------- References ----------
-      new_page("References", "Supporting sources")
-      y <- 0.86
-      for (i in seq_len(nrow(refs))) {
-        if (y < 0.12) { new_page("References", "Supporting sources"); y <- 0.86 }
-        y <- write_paragraph(paste0(i, ". ", refs$Title[i]), y, width = 112, cex = 0.62, leading = 0.022, colour = brand$dark, font = 2)
-        y <- write_paragraph(refs$URL[i], y, width = 112, cex = 0.52, leading = 0.020, colour = "#555555")
-        y <- y - 0.006
-      }
+      # ------------------------------------------------------------
+      # Priority summary
+      # ------------------------------------------------------------
+      new_page()
+      header("Priority summary")
       
-      # ---------- Interpretation and contact ----------
-      new_page("Interpretation and contact", "Important information")
-      y <- 0.86
-      y <- write_heading("How to interpret this report", y)
-      y <- write_paragraph(
-        "This report provides a screening-level assessment of farm-scale natural capital. It combines user-entered indicators with simplified assumptions and proxy measures. It does not replace field survey, remote-sensing analysis, soil testing, biodiversity assessment, emissions accounting, financial analysis, regulatory assessment or professional natural capital accounting.",
-        y, cex = 0.70, leading = 0.026
+      y <- 0.875
+      y <- text_block(
+        "This page provides a concise management view of the assessment. It does not replace the detailed metric table; it highlights where attention may be most useful based on the screening scores and the predefined management guidance.",
+        y, width_chars = 108
       )
-      y <- write_paragraph(
-        "Scores should be used to identify relative strengths and priorities, support discussion, and guide monitoring and management decisions. Results will be most useful when reviewed alongside seasonal conditions, farm maps, paddock records and local expert knowledge.",
-        y, cex = 0.70, leading = 0.026
+      y <- y - 0.015
+      
+      priority_table <- data.frame(
+        Metric = metric_labels[match(
+          a$rec$Metric[order(a$rec$Score, decreasing = FALSE)],
+          metric_keys
+        )],
+        Score = paste0(
+          a$rec$Score[order(a$rec$Score, decreasing = FALSE)],
+          "/100"
+        ),
+        Interpretation = a$rec$Interpretation[order(a$rec$Score, decreasing = FALSE)],
+        Priority = a$rec$Priority[order(a$rec$Score, decreasing = FALSE)],
+        Timeframe = a$rec$Timeframe[order(a$rec$Score, decreasing = FALSE)],
+        stringsAsFactors = FALSE
       )
       
-      y <- write_heading("Contact", y)
-      y <- write_paragraph(paste(contact$name, "-", contact$role), y, cex = 0.72, font = 2)
-      y <- write_paragraph(contact$email, y, cex = 0.66)
-      y <- write_paragraph(contact$mobile, y, cex = 0.66)
-      y <- write_paragraph(contact$address, y, cex = 0.66)
+      y <- section_heading("Metrics requiring the most management attention", y, colour = brand$red)
+      y <- draw_table(
+        priority_table[priority_table$Score != "", , drop = FALSE],
+        y,
+        widths = c(0.42, 0.12, 0.18, 0.13, 0.15),
+        font_size = 1.0
+      )
       
-      y <- write_heading("Disclaimer", y)
-      y <- write_paragraph(disclaimer_text, y, cex = 0.58, leading = 0.022)
+      # Strengths and lower-scoring metrics are both retained.
+      y <- section_heading("Areas to maintain or strengthen", y, colour = brand$green)
+      strong_table <- data.frame(
+        Metric = metric_labels[match(
+          a$rec$Metric[a$rec$Score >= 60], metric_keys
+        )],
+        Score = paste0(a$rec$Score[a$rec$Score >= 60], "/100"),
+        Interpretation = a$rec$Interpretation[a$rec$Score >= 60],
+        stringsAsFactors = FALSE
+      )
+      y <- draw_table(
+        strong_table, y,
+        widths = c(0.62, 0.16, 0.22),
+        font_size = 1.0
+      )
       
-      grDevices::dev.off()
-      TRUE
-    }, error = function(e) {
-      close_report_devices()
+      # ------------------------------------------------------------
+      # Natural-capital interpretation and limitations
+      # ------------------------------------------------------------
+      new_page()
+      header("Interpretation, scope and limitations")
       
-      # Write a valid one-page PDF so the download is never interpreted as HTML.
-      grDevices::pdf(file = file, width = 8.27, height = 11.69,
-                     paper = "a4", onefile = TRUE, family = "Helvetica",
-                     useDingbats = FALSE)
-      plot.new()
-      par(mar = c(0.5, 0.5, 0.5, 0.5), usr = c(0, 1, 0, 1))
-      rect(0, 0.88, 1, 1, col = brand$dark, border = NA)
-      text(0.5, 0.94, "Green Sheep Project", adj = c(0.5, 0.5), cex = 1.4, font = 2, col = "white")
-      text(0.5, 0.70, "Natural Capital Assessment Report", adj = c(0.5, 0.5), cex = 1.05, font = 2, col = brand$dark)
-      text(0.5, 0.55, "The full report could not be generated because of an error.", adj = c(0.5, 0.5), cex = 0.72, col = brand$text)
-      text(0.5, 0.48, paste("Error:", conditionMessage(e)), adj = c(0.5, 0.5), cex = 0.58, col = brand$red)
-      text(0.5, 0.30, "Please check the farm inputs and try again.", adj = c(0.5, 0.5), cex = 0.65, col = brand$text)
-      text(0.5, 0.10, "aali@wheatbeltnrm.org.au", adj = c(0.5, 0.5), cex = 0.60, col = "#555555")
-      grDevices::dev.off()
+      y <- 0.875
+      y <- section_heading("How to use this report", y)
+      y <- text_block(
+        paste(
+          "The assessment is designed as a producer-friendly screening tool.",
+          "It converts different input scales into a common 0-100 score and",
+          "groups results into seven domains. The report is most useful when",
+          "used as a repeatable baseline for identifying management priorities,",
+          "tracking change and supporting discussion with advisers, NRM staff",
+          "and farm decision-makers."
+        ),
+        y, width_chars = 108
+      )
       
-      showModal(modalDialog(
-        title = "PDF report could not be generated",
-        paste("The full PDF report could not be created. Error:", conditionMessage(e)),
-        easyClose = TRUE
-      ))
-      FALSE
-    })
-    
-    invisible(report_ok)
-  }
+      y <- y - 0.015
+      y <- section_heading("Important limitations", y)
+      y <- text_block(disclaimer_text, y, width_chars = 108)
+      
+      y <- y - 0.015
+      y <- section_heading("Proximity scoring interpretation", y)
+      y <- text_block(
+        paste(
+          "The proximity metric follows the producer-facing scoring guide:",
+          "less than 300 m is the highly desirable class (0.70-1.00);",
+          "300-500 m is the desirable class (0.40-0.69); and greater than",
+          "500 m is the undesirable class (0.00-0.39). Within these classes",
+          "the score is continuous, declines to zero at 1,000 m, and remains",
+          "zero beyond 1,000 m. The reported distance is the entered mean",
+          "straight-line distance to woody vegetation."
+        ),
+        y, width_chars = 108
+      )
+      
+      y <- y - 0.015
+      y <- section_heading("Salt-affected land", y)
+      y <- text_block(
+        metric_defs$Definition[match("Salt Affected Land Management", metric_defs$Metric)],
+        y, width_chars = 108
+      )
+      
+      # ------------------------------------------------------------
+      # References
+      # ------------------------------------------------------------
+      new_page()
+      header("Supporting references")
+      
+      y <- 0.875
+      y <- text_block(
+        "The following references support the concepts and management guidance used in the assessment. Full technical calculation tables and the complete reference dataset are retained in the Excel workbook.",
+        y, width_chars = 108
+      )
+      y <- y - 0.015
+      
+      # Keep all references, but use an integrated table so the report remains
+      # readable and avoids a long URL-per-line bibliography.
+      ref_table <- data.frame(
+        No. = seq_len(nrow(refs)),
+        Reference = refs$Title,
+        URL = refs$URL,
+        stringsAsFactors = FALSE
+      )
+      y <- draw_table(
+        ref_table, y,
+        widths = c(0.07, 0.48, 0.45),
+        font_size = 1.0,
+        line_height = 0.032,
+        row_gap = 0.006
+      )
+      
+      # ------------------------------------------------------------
+      # Contact and record
+      # ------------------------------------------------------------
+      new_page()
+      header("Report record and contact")
+      
+      y <- 0.84
+      y <- text_block(
+        "Assessment record",
+        y, cex = 1.25, width_chars = 108, colour = brand$dark
+      )
+      y <- text_block(
+        paste0("Farm: ", safe(a$x$farm_name)),
+        y, width_chars = 108
+      )
+      y <- text_block(
+        paste0("System: ", a$x$system),
+        y, width_chars = 108
+      )
+      y <- text_block(
+        paste0("Farm area: ", a$x$area, " ha"),
+        y, width_chars = 108
+      )
+      y <- text_block(
+        paste0("Assessment date and time: ", format(a$time, "%d %B %Y %H:%M")),
+        y, width_chars = 108
+      )
+      y <- text_block(
+        paste0("Overall score: ", overall_score, "/100 (", overall_band, ")"),
+        y, width_chars = 108
+      )
+      
+      y <- y - 0.04
+      y <- section_heading("Project contact", y)
+      y <- text_block(contact$name, y, cex = 1.20, width_chars = 108, colour = brand$dark)
+      y <- text_block(contact$role, y, width_chars = 108)
+      y <- text_block(contact$email, y, width_chars = 108)
+      y <- text_block(contact$mobile, y, width_chars = 108)
+      y <- text_block(contact$address, y, width_chars = 108)
+      
+      y <- y - 0.035
+      y <- section_heading("Copyright and use", y)
+      y <- text_block(
+        "© 2026 All rights reserved. Free use for personal, non-commercial farm assessment. Commercial use, reproduction, modification or derivative use requires prior written permission.",
+        y, width_chars = 108
+      )
+    }
+  )
   
-  observeEvent(input$pdf_browser, {
-    pdf_file <- tempfile(fileext = ".pdf")
-    on.exit(unlink(pdf_file), add = TRUE)
-    notification <- showNotification("Preparing PDF report...", duration = NULL)
-    on.exit(removeNotification(notification), add = TRUE)
-    tryCatch({
-      ok <- generate_pdf(pdf_file)
-      if (!isTRUE(ok)) return(invisible(NULL))
-      if (!file.exists(pdf_file) || file.info(pdf_file)$size < 5)
-        stop("No PDF file was generated.")
-      con <- file(pdf_file, "rb")
-      signature <- rawToChar(readBin(con, "raw", n = 5L))
-      close(con)
-      if (!identical(signature, "%PDF-")) stop("The generated file is not a PDF.")
-      filename <- paste0(gsub("[^A-Za-z0-9_]+", "_", safe(input$farm_name)),
-                         "Natural_Capital_Report_", Sys.Date(), ".pdf")
-      session$sendCustomMessage("natcap_download", list(
-        filename = filename, mime = "application/pdf",
-        data = base64enc::base64encode(pdf_file)
-      ))
-    }, error = function(e) {
-      showNotification(paste("PDF export failed:", conditionMessage(e)),
-                       type = "error", duration = NULL)
-    })
-  }, ignoreInit = TRUE)
   
 }
 
